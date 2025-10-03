@@ -8,7 +8,7 @@ A lightweight version control system similar to Git, written in Python and C++.
 CAF serves as an educational project for understanding how complex distributed version control systems work under the
 hood.
 
-[![Test CI](https://github.com/idoby/asp25-caf-assignment/actions/workflows/tests.yml/badge.svg)](https://github.com/idoby/asp25-caf-assignment/actions/workflows/tests.yml)
+[![Test CI](https://github.com/idoby/asp-caf-assignment/actions/workflows/tests.yml/badge.svg)](https://github.com/idoby/asp-caf-assignment/actions/workflows/tests.yml)
 
 ## 🌟 Project Overview
 
@@ -133,7 +133,7 @@ The project includes comprehensive tests for both Python and C++ components:
 ## 📁 Project Structure
 
 ```
-asp25-caf-assignment/
+asp-caf-assignment/
 ├── Dockerfile                # Development environment setup
 ├── Makefile                  # Build and development commands
 ├── assignment/               # Assignment source
@@ -188,7 +188,7 @@ The project follows Python and C++ best practices:
 
 ## 🎓 Educational Context
 
-This project is part of the Advanced Systems Programming course (ASP25) and serves as a hands-on introduction to:
+This project is part of the Advanced Systems Programming course (ASP) and serves as a hands-on introduction to:
 
 - **Systems Programming**: Working with multi-language codebases
 - **Version Control Internals**: Understanding how Git-like systems work

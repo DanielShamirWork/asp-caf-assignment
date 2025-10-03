@@ -9,6 +9,6 @@ build/
 libcaf/_libcaf.pyi
 
 assignment/artifacts/*
-!assignment/artifacts/asp25-assignment1.pdf
+!assignment/artifacts/asp26-assignment1.pdf
 
 coverage
