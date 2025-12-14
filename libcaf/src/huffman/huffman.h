@@ -2,16 +2,9 @@
 #define HUFFMAN_H
 
 #include <cstdint>
+#include <array>
+#include <string>
 
-class Huffman {
-public:
-    Huffman();
-    ~Huffman();
-
-    const uint64_t *frequencies(const char* const str);
-
-private:
-    uint64_t freqs[256];
-};
+std::array<uint64_t, 256> histogram(const std::string &str);
 
 #endif // HUFFMAN_H

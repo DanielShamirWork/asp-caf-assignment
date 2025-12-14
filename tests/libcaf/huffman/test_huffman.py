@@ -1,5 +1,5 @@
 import pytest
-from libcaf import Huffman
+from libcaf import histogram
 
 @pytest.mark.parametrize("input_str, expected_freqs", [
     ("aaa", {'a': 3}),
@@ -8,9 +8,8 @@ from libcaf import Huffman
     (None, {}),
     ("mississippi", {'m': 1, 'i': 4, 's': 4, 'p': 2}),
 ])
-def test_huffman_frequencies(input_str, expected_freqs):
-    h = Huffman()
-    freqs = h.frequencies(input_str)
+def test_histogram(input_str, expected_freqs):
+    freqs = histogram(input_str)
 
     # Check that we get a 256-element array
     assert len(freqs) == 256

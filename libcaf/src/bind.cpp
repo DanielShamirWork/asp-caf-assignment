@@ -60,13 +60,11 @@ PYBIND11_MODULE(_libcaf, m) {
         .def_readonly("timestamp", &Commit::timestamp)
         .def_readonly("parent", &Commit::parent);
 
-    py::class_<Huffman>(m, "Huffman")
-        .def(py::init<>())
-        .def("frequencies", [](Huffman &self, const char* str) {
-            const uint64_t *freqs = self.frequencies(str);
-            if (freqs == nullptr) {
-                return std::vector<uint64_t>();
-            }
-            return std::vector<uint64_t>(freqs, freqs + 256);
-        }, py::arg("str"));
+    // huffman compression
+    m.def("histogram", [](py::object str_obj) {
+        if (str_obj.is_none()) {
+            return histogram("");
+        }
+        return histogram(str_obj.cast<std::string>());
+    }, py::arg("str"));
 }
