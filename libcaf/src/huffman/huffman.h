@@ -9,6 +9,9 @@ public:
     ~Huffman();
 
     const uint64_t *frequencies(const char* const str);
+
+private:
+    uint64_t freqs[256];
 };
 
 #endif // HUFFMAN_H

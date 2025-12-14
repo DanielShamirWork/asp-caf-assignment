@@ -65,8 +65,8 @@ PYBIND11_MODULE(_libcaf, m) {
         .def("frequencies", [](Huffman &self, const char* str) {
             const uint64_t *freqs = self.frequencies(str);
             if (freqs == nullptr) {
-                return py::array_t<uint64_t>();
+                return std::vector<uint64_t>();
             }
-            return py::array_t<uint64_t>(256, freqs);
+            return std::vector<uint64_t>(freqs, freqs + 256);
         }, py::arg("str"));
 }

@@ -5,6 +5,7 @@ from libcaf import Huffman
     ("aaa", {'a': 3}),
     ("aab", {'a': 2, 'b': 1}),
     ("", {}),
+    (None, {}),
     ("mississippi", {'m': 1, 'i': 4, 's': 4, 'p': 2}),
 ])
 def test_huffman_frequencies(input_str, expected_freqs):
