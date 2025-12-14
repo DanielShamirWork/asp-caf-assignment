@@ -16,6 +16,7 @@ add_library(_libcaf MODULE
     src/hash_types.cpp
     src/object_io.cpp
     src/bind.cpp
+    src/huffman/huffman.cpp
 )
 
 target_compile_features(_libcaf PRIVATE cxx_std_17)

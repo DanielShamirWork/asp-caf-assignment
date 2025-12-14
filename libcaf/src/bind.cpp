@@ -2,7 +2,8 @@
 #include <pybind11/stl.h>
 #include "caf.h"
 #include "hash_types.h"
-#include "object_io.h" 
+#include "object_io.h"
+#include "huffman/huffman.h" 
 
 using namespace std;
 namespace py = pybind11;
@@ -58,4 +59,14 @@ PYBIND11_MODULE(_libcaf, m) {
         .def_readonly("message", &Commit::message)
         .def_readonly("timestamp", &Commit::timestamp)
         .def_readonly("parent", &Commit::parent);
+
+    py::class_<Huffman>(m, "Huffman")
+        .def(py::init<>())
+        .def("frequencies", [](Huffman &self, const char* str) {
+            const uint64_t *freqs = self.frequencies(str);
+            if (freqs == nullptr) {
+                return py::array_t<uint64_t>();
+            }
+            return py::array_t<uint64_t>(256, freqs);
+        }, py::arg("str"));
 }
