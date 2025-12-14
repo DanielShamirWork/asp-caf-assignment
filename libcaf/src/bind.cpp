@@ -3,7 +3,7 @@
 #include "caf.h"
 #include "hash_types.h"
 #include "object_io.h"
-#include "huffman/huffman.h" 
+#include "huffman/huffman.h"
 
 using namespace std;
 namespace py = pybind11;
