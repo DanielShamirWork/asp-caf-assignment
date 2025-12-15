@@ -8,7 +8,7 @@ from libcaf import histogram
     (None, {}),
     ("mississippi", {'m': 1, 'i': 4, 's': 4, 'p': 2}),
 ])
-def test_histogram(input_str, expected_freqs):
+def test_histogram(input_str: str | None, expected_freqs: dict[str, int]) -> None:
     freqs = histogram(input_str)
 
     # Check that we get a 256-element array
