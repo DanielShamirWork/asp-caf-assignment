@@ -61,10 +61,18 @@ PYBIND11_MODULE(_libcaf, m) {
         .def_readonly("parent", &Commit::parent);
 
     // huffman compression
-    m.def("histogram", [](py::object str_obj) {
-        if (str_obj.is_none()) {
-            return histogram("");
+    m.def("histogram", [](std::optional<py::bytes> str_obj) {
+        if (!str_obj) {
+            return histogram(nullptr, 0);
         }
-        return histogram(str_obj.cast<std::string>());
+
+        char* buffer;
+        Py_ssize_t length;
+        
+        if (PyBytes_AsStringAndSize(str_obj->ptr(), &buffer, &length) != 0) {
+            throw py::error_already_set();
+        }
+        
+        return histogram(reinterpret_cast<const unsigned char*>(buffer), static_cast<size_t>(length));
     }, py::arg("str"));
 }
