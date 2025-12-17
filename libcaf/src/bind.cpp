@@ -4,6 +4,7 @@
 #include "hash_types.h"
 #include "object_io.h"
 #include "huffman/huffman.h"
+#include "huffman/huffman_tree.h"
 
 using namespace std;
 namespace py = pybind11;
