@@ -17,6 +17,7 @@ add_library(_libcaf MODULE
     src/object_io.cpp
     src/bind.cpp
     src/huffman/huffman.cpp
+    src/huffman/huffman_tree.cpp
 )
 
 target_compile_features(_libcaf PRIVATE cxx_std_17)
