@@ -14,13 +14,12 @@ uint64_t HuffmanTree::build_tree_and_get_root_index(const unsigned char * const 
 
     // create all leaf nodes and insert them into the minimum heap and the nodes data arrays
     this->num_nodes = 0;
-    for (unsigned char i = 0; i < hist.size(); i++) {
+    for (size_t i = 0; i < hist.size(); i++) {
         if (hist[i] > 0) {
             min_heap.push(this->num_nodes);
             this->add_node(i, hist[i], HUFFMAN_NODE_NULL_INDEX, HUFFMAN_NODE_NULL_INDEX);
+            this->num_nodes++;
         }
-
-        this->num_nodes++;
     }
 
     // build all the internal nodes, until there is only one node left in the heap
