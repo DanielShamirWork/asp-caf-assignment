@@ -4,7 +4,6 @@
 #include "hash_types.h"
 #include "object_io.h"
 #include "huffman/huffman.h"
-#include "huffman/huffman_tree.h"
 
 using namespace std;
 namespace py = pybind11;
@@ -77,30 +76,7 @@ PYBIND11_MODULE(_libcaf, m) {
         return histogram(reinterpret_cast<const unsigned char*>(buffer), static_cast<size_t>(length));
     }, py::arg("str"));
 
-    // HuffmanTree bindings
-    m.attr("HUFFMAN_NODE_NULL_INDEX") = static_cast<uint64_t>(HUFFMAN_NODE_NULL_INDEX);
-    py::class_<HuffmanTree>(m, "HuffmanTree")
-        .def(py::init<>())
-        .def("build_tree_and_get_root_index", 
-            [](HuffmanTree* self, std::optional<py::bytes> str_obj) {
-                if (!str_obj) {
-                    return self->build_tree_and_get_root_index(nullptr, 0);
-                }
-
-                char* buffer;
-                Py_ssize_t length;
-                if (PyBytes_AsStringAndSize(str_obj->ptr(), &buffer, &length) != 0) {
-                    throw py::error_already_set();
-                }
-
-                return self->build_tree_and_get_root_index(reinterpret_cast<const unsigned char*>(buffer), static_cast<size_t>(length));
-            }, py::arg("str"))
-        .def("get_num_nodes", &HuffmanTree::get_num_nodes)
-        .def("get_symbol", &HuffmanTree::get_symbol, py::arg("index"))
-        .def("get_frequency", &HuffmanTree::get_frequency, py::arg("index"))
-        .def("get_left_index", &HuffmanTree::get_left_index, py::arg("index"))
-        .def("get_right_index", &HuffmanTree::get_right_index, py::arg("index"))
-        .def("is_leaf_node", &HuffmanTree::is_leaf_node, py::arg("index"));
-
-    
+    // huffman_tree bindings
+    m.def("HuffmanNode", &HuffmanNode);
+    m.def("huffman_tree", &huffman_tree);
 }
