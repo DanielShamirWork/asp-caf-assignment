@@ -15,41 +15,37 @@ std::array<uint64_t, 256> histogram(const unsigned char* data, size_t length) {
     return freqs;
 }
 
-std::pair<std::vector<HuffmanNode *>, size_t> huffman_tree(const std::array<uint64_t, 256>& hist) {
-    std::priority_queue<uint64_t, std::vector<uint64_t>> min_heap;
-    std::vector<HuffmanNode *> nodes;
+std::pair<std::vector<HuffmanNode>, size_t> huffman_tree(const std::array<uint64_t, 256>& hist) {
+    std::priority_queue<size_t, std::vector<size_t>> min_heap;
+    std::vector<HuffmanNode> nodes;
+    nodes.reserve(2 * 256 - 1); // Max number of nodes in a full binary tree with 256 leaves
 
-    // create all leaf nodes and insert them into the minimum heap and the nodes data arrays
-    size_t num_nodes = 0;
+    // Create all leaf nodes
+    size_t next_node_idx = 0;
     for (size_t i = 0; i < hist.size(); i++) {
-        if (hist[i] > 0) {
-            min_heap.push(num_nodes);
-            HuffmanNode *node = new HuffmanNode(hist[i], static_cast<unsigned char>(i));
-            nodes.push_back(node);
-            num_nodes++;
-        }
+        if (hist[i] == 0)
+            continue;
+
+        min_heap.push(next_node_idx);
+        nodes.emplace_back(hist[i], i);
+        next_node_idx++;
     }
 
     // build all the internal nodes, until there is only one node left in the heap
     while (min_heap.size() > 1) {
-        uint64_t left_index = min_heap.top();
+        const size_t left_index = min_heap.top();
         min_heap.pop();
-        uint64_t right_index = min_heap.top();
+        const size_t right_index = min_heap.top();
         min_heap.pop();
 
-        HuffmanNode *left_node = nodes[left_index];
-        HuffmanNode *right_node = nodes[right_index];
+        const uint64_t parent_frequency = nodes[left_index].frequency + nodes[right_index].frequency;
+        nodes.emplace_back(parent_frequency, left_index, right_index);
 
-        uint64_t parent_frequency = left_node->frequency + right_node->frequency;
-        
-        // create a new internal node
-        HuffmanNode *parent_node = new HuffmanNode(parent_frequency, left_index, right_index);
-        nodes.push_back(parent_node);
-        uint64_t parent_index = nodes.size() - 1;
+        const size_t parent_index = nodes.size() - 1;
         min_heap.push(parent_index);
     }
 
     // the remaining node is the root
-    size_t root_index = min_heap.top();
+    const size_t root_index = min_heap.top();
     return {nodes, root_index};
 }

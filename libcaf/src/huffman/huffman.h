@@ -10,6 +10,6 @@
 #include <utility>  // for std::pair
 
 std::array<uint64_t, 256> histogram(const unsigned char* data, size_t length);
-std::pair<std::vector<HuffmanNode *>, size_t> huffman_tree(const std::array<uint64_t, 256>& hist);
+std::pair<std::vector<HuffmanNode>, size_t> huffman_tree(const std::array<uint64_t, 256>& hist);
 
 #endif // HUFFMAN_H
