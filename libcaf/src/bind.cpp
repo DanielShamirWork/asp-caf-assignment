@@ -60,7 +60,7 @@ PYBIND11_MODULE(_libcaf, m) {
         .def_readonly("timestamp", &Commit::timestamp)
         .def_readonly("parent", &Commit::parent);
 
-    // huffman compression
+    // histogram for huffman compression
     m.def("histogram", [](std::optional<py::bytes> str_obj) {
         if (!str_obj) {
             return histogram(nullptr, 0);
@@ -75,4 +75,38 @@ PYBIND11_MODULE(_libcaf, m) {
         
         return histogram(reinterpret_cast<const unsigned char*>(buffer), static_cast<size_t>(length));
     }, py::arg("str"));
+
+    // huffman_tree bindings
+    py::class_<LeafNodeData>(m, "LeafNodeData")
+        .def_readonly("symbol", &LeafNodeData::symbol);
+
+    py::class_<InternalNodeData>(m, "InternalNodeData")
+        .def_readonly("left_index", &InternalNodeData::left_index)
+        .def_readonly("right_index", &InternalNodeData::right_index);
+
+    py::class_<HuffmanNode>(m, "HuffmanNode")
+        .def_readonly("frequency", &HuffmanNode::frequency)
+        .def_property_readonly("is_leaf", [](const HuffmanNode& n) {
+            return std::holds_alternative<LeafNodeData>(n.data);
+        })
+        .def_property_readonly("symbol", [](const HuffmanNode& n) -> std::optional<unsigned char> {
+            if (auto* val = std::get_if<LeafNodeData>(&n.data)) {
+                return val->symbol;
+            }
+            return std::nullopt;
+        })
+        .def_property_readonly("left_index", [](const HuffmanNode& n) -> std::optional<TreeIndex> {
+            if (auto* val = std::get_if<InternalNodeData>(&n.data)) {
+                return val->left_index;
+            }
+            return std::nullopt;
+        })
+        .def_property_readonly("right_index", [](const HuffmanNode& n) -> std::optional<TreeIndex> {
+            if (auto* val = std::get_if<InternalNodeData>(&n.data)) {
+                return val->right_index;
+            }
+            return std::nullopt;
+        });
+
+    m.def("huffman_tree", &huffman_tree);
 }
