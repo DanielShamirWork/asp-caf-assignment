@@ -44,7 +44,7 @@ CAF is built as a hybrid Python/C++ system:
 
 - Docker (recommended for consistent environment)
 - Python 3.10+
-- CMake 3.15+ and C++17 compiler
+- CMake 3.15+ and C++20 compiler
 
 ### Using Docker (Recommended)
 
