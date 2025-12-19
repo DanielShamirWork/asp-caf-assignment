@@ -3,6 +3,8 @@ CONTAINER_NAME = caf-dev-container
 IMAGE_NAME = caf-dev-image
 WORKSPACE_DIR ?= $(PWD)
 ENABLE_COVERAGE ?= 0
+DOCKER_MEMORY ?= 8g
+DOCKER_MEMORY_SWAP ?= 8g
 
 # === Container Management ===
 
@@ -26,6 +28,7 @@ run: build-container
 	else \
 		echo "✨ Creating and running new container..."; \
 		docker run --detach -it --name $(CONTAINER_NAME) \
+			--memory $(DOCKER_MEMORY) --memory-swap $(DOCKER_MEMORY_SWAP) \
 			-v $(WORKSPACE_DIR):/workspace $(IMAGE_NAME); \
 	fi
 

@@ -53,3 +53,13 @@ select = ['ALL']
 
 [tool.ruff.lint.flake8-quotes]
 inline-quotes = 'single'
+
+[project.optional-dependencies]
+test = [
+    'coverage>=7.10.7',
+    'pytest>=8.4.2',
+    'pytest-cov>=7.0.0',
+    'numpy>=1.26',
+    'pytest-benchmark>=4.0.0',
+    'matplotlib>=3.9.0'
+]

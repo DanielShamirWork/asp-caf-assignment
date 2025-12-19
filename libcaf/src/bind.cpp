@@ -1,12 +1,18 @@
-#include <pybind11/pybind11.h>
-#include <pybind11/stl.h>
 #include "caf.h"
 #include "hash_types.h"
 #include "object_io.h"
 #include "huffman/huffman.h"
 
+#include <span>
+#include <stdexcept>
+
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/numpy.h>
+
 using namespace std;
 namespace py = pybind11;
+
 
 PYBIND11_MODULE(_libcaf, m) {
     // caf
@@ -61,20 +67,23 @@ PYBIND11_MODULE(_libcaf, m) {
         .def_readonly("parent", &Commit::parent);
 
     // histogram for huffman compression
-    m.def("histogram", [](std::optional<py::bytes> str_obj) {
-        if (!str_obj) {
-            return histogram(nullptr, 0);
+    m.def("histogram", [](py::array_t<uint8_t, py::array::c_style> array) {
+        auto info = array.request();
+        if (info.ndim != 1) {
+            throw std::runtime_error("histogram expects a 1-D numpy array");
         }
+        auto* ptr = static_cast<const std::byte*>(info.ptr);
+        return histogram(std::span<const std::byte>(ptr, static_cast<size_t>(info.shape[0])));
+    }, py::arg("data"));
 
-        char* buffer;
-        Py_ssize_t length;
-        
-        if (PyBytes_AsStringAndSize(str_obj->ptr(), &buffer, &length) != 0) {
-            throw py::error_already_set();
+    m.def("histogram_fast", [](py::array_t<uint8_t, py::array::c_style> array) {
+        auto info = array.request();
+        if (info.ndim != 1) {
+            throw std::runtime_error("histogram_fast expects a 1-D numpy array");
         }
-        
-        return histogram(reinterpret_cast<const unsigned char*>(buffer), static_cast<size_t>(length));
-    }, py::arg("str"));
+        auto* ptr = static_cast<const std::byte*>(info.ptr);
+        return histogram_fast(std::span<const std::byte>(ptr, static_cast<size_t>(info.shape[0])));
+    }, py::arg("data"));
 
     // huffman_tree bindings
     py::class_<LeafNodeData>(m, "LeafNodeData")
@@ -89,9 +98,9 @@ PYBIND11_MODULE(_libcaf, m) {
         .def_property_readonly("is_leaf", [](const HuffmanNode& n) {
             return std::holds_alternative<LeafNodeData>(n.data);
         })
-        .def_property_readonly("symbol", [](const HuffmanNode& n) -> std::optional<unsigned char> {
+        .def_property_readonly("symbol", [](const HuffmanNode& n) -> std::optional<uint8_t> {
             if (auto* val = std::get_if<LeafNodeData>(&n.data)) {
-                return val->symbol;
+                return static_cast<uint8_t>(val->symbol);
             }
             return std::nullopt;
         })

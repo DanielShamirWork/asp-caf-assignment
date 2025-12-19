@@ -1,6 +1,6 @@
 """libcaf - Content Addressable File system in Python."""
 
-from _libcaf import Blob, Commit, Tree, TreeRecord, TreeRecordType, histogram, HuffmanNode, huffman_tree
+from _libcaf import Blob, Commit, HuffmanNode, Tree, TreeRecord, TreeRecordType, histogram, histogram_fast, huffman_tree
 
 __all__ = [
     'Blob',
@@ -9,6 +9,7 @@ __all__ = [
     'TreeRecord',
     'TreeRecordType',
     'histogram',
+    'histogram_fast',
     'HuffmanNode',
     'huffman_tree',
 ]
