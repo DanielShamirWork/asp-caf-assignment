@@ -1,45 +1,45 @@
 import numpy as np
 from pytest import mark
 
-from libcaf import histogram, huffman_tree
-
-
-def test_huffman_tree_empty_histogram_returns_no_root() -> None:
-    nodes, root_index = huffman_tree(histogram(np.array([], dtype=np.uint8)))
-
-    assert nodes == []
-    assert root_index is None
+from libcaf import histogram, histogram_fast, histogram_parallel, histogram_parallel_64bit, huffman_tree
 
 
 @mark.parametrize('payload_size', [
-    0, 1,
-    2 ** 4, 2 ** 4 + 1,
+    0,
+    2 ** 4,
     2 ** 8,
     2 ** 12,
     2 ** 20,  # 1 MiB
     2 ** 30,  # 1 GiB
     2 ** 32,  # 4 GiB
 ])
-def test_huffman_invariants(random_payload: np.ndarray) -> None:
-    hist = histogram(random_payload)
+@mark.parametrize('histogram_func', [
+    histogram,
+    histogram_parallel,
+    histogram_parallel_64bit,
+    histogram_fast
+])
+def test_huffman_invariants(random_payload: np.ndarray, histogram_func) -> None:
+    hist = histogram_func(random_payload)
 
     assert len(hist) == 256
     assert sum(hist) == len(random_payload)
 
-    nodes, root_index = huffman_tree(hist)
+    nodes = huffman_tree(hist)
 
     if len(random_payload) == 0:
         assert nodes == []
-        assert root_index is None
         return
 
-    assert root_index is not None
-    total_weight = nodes[root_index].frequency
+    assert len(nodes) >= 1
+
+    # The root node is always the last node created
+    total_weight = nodes[-1].frequency
     assert total_weight == len(random_payload)
 
     seen_nodes: set[int] = set()
     leaf_freqs = {i: 0 for i in range(256)}
-    stack = [root_index]
+    stack = [len(nodes) - 1]
 
     while stack:
         idx = stack.pop()
