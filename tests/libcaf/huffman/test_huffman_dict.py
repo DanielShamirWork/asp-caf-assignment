@@ -38,6 +38,8 @@ def test_huffman_dict_invariants(random_payload: np.ndarray) -> None:
         codes.add(code_tuple)
 
     # Verify that the codes satisfy the prefix property
+    # i.e. for all pairs of codes a and b, a is not a prefix of b
+    # this ensures that the codes can be uniquely decoded for decompression
     code_list = list(huff_dict.values())
     for i in range(len(code_list)):
         for j in range(len(code_list)):

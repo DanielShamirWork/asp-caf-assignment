@@ -11,7 +11,7 @@
 #include <pybind11/pybind11.h>
 
 // Custom type caster for std::byte
-// must be defined pybind11/stl.h!
+// must be defined before pybind11/stl.h!
 namespace pybind11 { namespace detail {
     template <> struct type_caster<std::byte> {
     public:
