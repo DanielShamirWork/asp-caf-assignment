@@ -5,14 +5,42 @@
 
 #include <span>
 #include <stdexcept>
+#include <vector>
+#include <cstring>
 
 #include <pybind11/pybind11.h>
+
+// Custom type caster for std::byte
+// must be defined before pybind11/stl.h!
+namespace pybind11 { namespace detail {
+    template <> struct type_caster<std::byte> {
+    public:
+        PYBIND11_TYPE_CASTER(std::byte, const_name("int"));
+
+        bool load(handle src, bool) {
+            PyObject *source = src.ptr();
+            if (!PyLong_Check(source)) return false;
+            unsigned long val = PyLong_AsUnsignedLong(source);
+            if (PyErr_Occurred()) {
+                PyErr_Clear();
+                return false;
+            }
+            if (val > 255) return false;
+            value = static_cast<std::byte>(val);
+            return true;
+        }
+
+        static handle cast(std::byte src, return_value_policy /* policy */, handle /* parent */) {
+            return PyLong_FromUnsignedLong(static_cast<unsigned char>(src));
+        }
+    };
+}}
+
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 
 using namespace std;
 namespace py = pybind11;
-
 
 PYBIND11_MODULE(_libcaf, m) {
     // caf
@@ -136,4 +164,7 @@ PYBIND11_MODULE(_libcaf, m) {
         });
 
     m.def("huffman_tree", &huffman_tree);
+
+    // huffman_dict bindings
+    m.def("huffman_dict", &huffman_dict);
 }

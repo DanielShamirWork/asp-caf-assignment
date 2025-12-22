@@ -20,7 +20,9 @@ add_library(_libcaf MODULE
     src/hash_types.cpp
     src/object_io.cpp
     src/bind.cpp
-    src/huffman/huffman.cpp
+    src/huffman/huffman_histogram.cpp
+    src/huffman/huffman_tree.cpp
+    src/huffman/huffman_dict.cpp
 )
 
 # Warnings and treat warnings as errors
