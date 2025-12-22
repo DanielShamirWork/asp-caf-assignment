@@ -1,12 +1,19 @@
 #include "huffman.h"
 #include <stack>
 
+#include <iostream>
+
 // builds a dictionary based on the huffman tree nodes
 std::unordered_map<std::byte, std::vector<bool>> huffman_dict(const std::vector<HuffmanNode>& nodes) {
     std::unordered_map<std::byte, std::vector<Bit>> dict;
+
+    if (nodes.empty()) {
+        return dict;
+    }
+
     dict.reserve(256); // reserve space for all possible byte values
 
-    // iterative DFS to build the dictionary
+    // iterative DFS algorithm to build the dictionary of huffman codes
 
     // the stack will hold for each node its index and the path taken to reach it
     struct StackItem {
