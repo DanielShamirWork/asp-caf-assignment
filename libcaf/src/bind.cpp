@@ -76,6 +76,24 @@ PYBIND11_MODULE(_libcaf, m) {
         return histogram(std::span<const std::byte>(ptr, static_cast<size_t>(info.shape[0])));
     }, py::arg("data"));
 
+    m.def("histogram_parallel", [](py::array_t<uint8_t, py::array::c_style> array) {
+        auto info = array.request();
+        if (info.ndim != 1) {
+            throw std::runtime_error("histogram_parallel expects a 1-D numpy array");
+        }
+        auto* ptr = static_cast<const std::byte*>(info.ptr);
+        return histogram_parallel(std::span<const std::byte>(ptr, static_cast<size_t>(info.shape[0])));
+    }, py::arg("data"));
+
+    m.def("histogram_parallel_64bit", [](py::array_t<uint8_t, py::array::c_style> array) {
+        auto info = array.request();
+        if (info.ndim != 1) {
+            throw std::runtime_error("histogram_parallel_64bit expects a 1-D numpy array");
+        }
+        auto* ptr = static_cast<const std::byte*>(info.ptr);
+        return histogram_parallel_64bit(std::span<const std::byte>(ptr, static_cast<size_t>(info.shape[0])));
+    }, py::arg("data"));
+
     m.def("histogram_fast", [](py::array_t<uint8_t, py::array::c_style> array) {
         auto info = array.request();
         if (info.ndim != 1) {

@@ -1,7 +1,7 @@
 import numpy as np
 from pytest import mark
 
-from libcaf import histogram, histogram_fast, huffman_tree
+from libcaf import histogram, histogram_parallel, histogram_parallel_64bit, histogram_fast, huffman_tree
 
 SIZES = [
     2 ** 4,  # 16 B
@@ -26,7 +26,7 @@ SIZES = [
 ]
 
 
-@mark.parametrize('histogram_func', [histogram, histogram_fast], ids=['histogram', 'histogram_fast'])
+@mark.parametrize('histogram_func', [histogram, histogram_parallel, histogram_parallel_64bit, histogram_fast], ids=['histogram', 'histogram_parallel', 'histogram_parallel_64bit', 'histogram_fast'])
 @mark.parametrize('payload_size', SIZES)
 def test_benchmark_huffman_tree(random_payload: np.ndarray, benchmark, histogram_func) -> None:  # type: ignore[no-untyped-def]
     def create_tree():
