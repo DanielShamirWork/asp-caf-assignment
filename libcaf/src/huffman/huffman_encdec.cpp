@@ -3,6 +3,9 @@
 #include <stdexcept>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+#include <omp.h>
+#include <cstring>
 
 /*
     huffman compressed file layout:
@@ -25,7 +28,7 @@ uint64_t calculate_compressed_size_in_bits(const std::array<uint64_t, 256>& hist
 
 void huffman_encode_span(const std::span<const std::byte> from, const std::span<std::byte> to, const std::array<std::vector<bool>, 256>& dict) {
     uint64_t bit_position = 0;
-    
+
     for (size_t i = 0; i < from.size(); ++i) {
         uint8_t byte = static_cast<uint8_t>(from[i]);
         const std::vector<bool>& code = dict[byte];
@@ -41,6 +44,83 @@ void huffman_encode_span(const std::span<const std::byte> from, const std::span<
 
             bit_position++;
         }
+    }
+}
+
+void huffman_encode_span_parallel(const std::span<const std::byte> from, const std::span<std::byte> to, const std::array<std::vector<bool>, 256>& dict) {
+    const int num_threads = omp_get_max_threads();
+    const size_t chunk_size = (from.size() + num_threads - 1) / num_threads;
+
+    // Per-thread buffers to hold encoded chunks
+    std::vector<std::vector<std::byte>> thread_buffers(num_threads);
+    std::vector<uint64_t> thread_bit_sizes(num_threads, 0);
+
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        const size_t start = thread_id * chunk_size;
+        const size_t end = std::min(start + chunk_size, from.size());
+
+        if (start < end) {
+            // Calculate size needed for this chunk
+            uint64_t chunk_bits = 0;
+            for (size_t i = start; i < end; ++i) {
+                uint8_t byte = static_cast<uint8_t>(from[i]);
+                chunk_bits += dict[byte].size();
+            }
+            thread_bit_sizes[thread_id] = chunk_bits;
+
+            // Allocate buffer for this chunk
+            const size_t chunk_bytes = (chunk_bits + 7) / 8;
+            thread_buffers[thread_id].resize(chunk_bytes, std::byte{0});
+
+            // Encode this chunk
+            uint64_t bit_position = 0;
+            for (size_t i = start; i < end; ++i) {
+                uint8_t byte = static_cast<uint8_t>(from[i]);
+                const std::vector<bool>& code = dict[byte];
+
+                for (size_t j = 0; j < code.size(); ++j) {
+                    size_t bit_index = bit_position;
+                    size_t byte_index = bit_index / 8;
+                    size_t bit_offset = 7 - (bit_index % 8);
+
+                    std::byte code_bit = code[j] ? std::byte{1} : std::byte{0};
+                    thread_buffers[thread_id][byte_index] |= static_cast<std::byte>(code_bit << bit_offset);
+
+                    bit_position++;
+                }
+            }
+        }
+    }
+
+    // Combine all thread buffers into the output buffer
+    uint64_t current_bit_offset = 0;
+    for (int t = 0; t < num_threads; ++t) {
+        const uint64_t chunk_bits = thread_bit_sizes[t];
+        if (chunk_bits == 0) continue;
+
+        const auto& thread_buffer = thread_buffers[t];
+
+        // Copy bits from thread buffer to output buffer
+        for (uint64_t bit_idx = 0; bit_idx < chunk_bits; ++bit_idx) {
+            size_t src_byte_idx = bit_idx / 8;
+            size_t src_bit_offset = 7 - (bit_idx % 8);
+
+            size_t dst_bit_pos = current_bit_offset + bit_idx;
+            size_t dst_byte_idx = dst_bit_pos / 8;
+            size_t dst_bit_offset = 7 - (dst_bit_pos % 8);
+
+            // Read bit from source
+            std::byte bit = (thread_buffer[src_byte_idx] >> src_bit_offset) & std::byte{1};
+
+            // Write bit to destination
+            if (bit != std::byte{0}) {
+                to[dst_byte_idx] |= static_cast<std::byte>(std::byte{1} << dst_bit_offset);
+            }
+        }
+
+        current_bit_offset += chunk_bits;
     }
 }
 
@@ -71,7 +151,7 @@ uint64_t huffman_encode_file(const std::string& input_file, const std::string& o
     const uint64_t compressed_size_in_bytes = (compressed_size_in_bits + 7) / 8; // round up to full bytes
 
     std::vector<std::byte> compressed_data(compressed_size_in_bytes, std::byte{0});
-    huffman_encode_span(input_data, compressed_data, dict);
+    huffman_encode_span_parallel(input_data, compressed_data, dict);
 
     // create or truncate output file
     std::ofstream out(output_file, std::ios::binary | std::ios::trunc);

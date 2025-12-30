@@ -19,7 +19,7 @@ from libcaf import huffman_encode_file
     2 ** 20,  # 1 MiB
     2 ** 24,  # 16 MiB
     2 ** 26,  # 64 MiB
-    # 2 ** 28,  # 256 MiB
+    2 ** 28,  # 256 MiB
     # 2 ** 30,  # 1 GiB
     # 2 ** 32,  # 4 GiB
 ])
