@@ -20,7 +20,6 @@ std::array<uint64_t, 256> histogram_fast(std::span<const std::byte> data);
 std::vector<HuffmanNode> huffman_tree(const std::array<uint64_t, 256>& hist);
 
 // huffman_dict.cpp
-using Bit = bool;
-std::unordered_map<std::byte, std::vector<bool>> huffman_dict(const std::vector<HuffmanNode>& nodes);
+std::array<std::vector<bool>, 256> huffman_dict(const std::vector<HuffmanNode>& nodes);
 
 #endif // HUFFMAN_H
