@@ -63,7 +63,7 @@ uint64_t huffman_encode_file(const std::string& input_file, const std::string& o
     } 
     in.close();
 
-    const std::array<uint64_t, 256> hist = histogram_fast(input_data);
+    const std::array<uint64_t, 256> hist = histogram_parallel(input_data);
     const std::vector<HuffmanNode> tree = huffman_tree(hist);
     const std::array<std::vector<bool>, 256> dict = huffman_dict(tree);
 
