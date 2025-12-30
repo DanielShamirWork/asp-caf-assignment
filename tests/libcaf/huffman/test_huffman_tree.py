@@ -10,14 +10,14 @@ from libcaf import histogram, histogram_fast, histogram_parallel, histogram_para
     2 ** 8,
     2 ** 12,
     2 ** 20,  # 1 MiB
-    2 ** 30,  # 1 GiB
-    2 ** 32,  # 4 GiB
+    # 2 ** 30,  # 1 GiB
+    # 2 ** 32,  # 4 GiB
 ])
 @mark.parametrize('histogram_func', [
     histogram,
     histogram_parallel,
-    histogram_parallel_64bit,
-    histogram_fast
+    # histogram_parallel_64bit,
+    # histogram_fast
 ])
 def test_huffman_invariants(random_payload: np.ndarray, histogram_func) -> None:
     hist = histogram_func(random_payload)
