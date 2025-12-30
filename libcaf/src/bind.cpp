@@ -167,4 +167,7 @@ PYBIND11_MODULE(_libcaf, m) {
 
     // huffman_dict bindings
     m.def("huffman_dict", &huffman_dict);
+
+    // huffman_encdec bindings
+    m.def("huffman_encode_file", &huffman_encode_file);
 }

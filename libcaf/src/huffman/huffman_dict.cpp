@@ -11,6 +11,13 @@ std::array<std::vector<bool>, 256> huffman_dict(const std::vector<HuffmanNode>& 
         return dict;
     }
 
+    if (nodes.size() == 1) {
+        // special case: only one symbol in the tree
+        const auto& leaf = std::get<LeafNodeData>(nodes[0].data);
+        dict[std::to_integer<size_t>(leaf.symbol)] = {false}; // assign code '0'
+        return dict;
+    }
+
     // iterative DFS algorithm to build the dictionary of huffman codes
 
     // the stack will hold for each node its index and the path taken to reach it

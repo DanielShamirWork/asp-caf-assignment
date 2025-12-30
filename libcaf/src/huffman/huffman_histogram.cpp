@@ -125,13 +125,21 @@ std::array<uint64_t, 256> histogram_fast(std::span<const std::byte> data) {
         auto& local_freqs = partial_freqs[thread_id];
         local_freqs.fill(0);
 
-        const size_t start = thread_id * chunk_size;
+        size_t start = thread_id * chunk_size;
         const size_t end = std::min(start + chunk_size, data.size());
 
-        const auto* ptr = reinterpret_cast<const uint64_t*>(data.data() + start);
+        const auto* byte_ptr = reinterpret_cast<const uint8_t*>(data.data() + start);
         size_t remaining = end - start;
 
-        // Process 8 bytes at a time
+        // Align to 8-byte boundary
+        while (remaining > 0 && (reinterpret_cast<uintptr_t>(byte_ptr) & 7) != 0) {
+            local_freqs[*byte_ptr]++;
+            byte_ptr++;
+            remaining--;
+        }
+
+        // Process 8 bytes at a time (now aligned)
+        const auto* ptr = reinterpret_cast<const uint64_t*>(byte_ptr);
         while (remaining >= 8) {
             uint64_t word = *ptr;
 
@@ -149,7 +157,7 @@ std::array<uint64_t, 256> histogram_fast(std::span<const std::byte> data) {
         }
 
         // Handle remaining bytes
-        const auto* byte_ptr = reinterpret_cast<const uint8_t*>(ptr);
+        byte_ptr = reinterpret_cast<const uint8_t*>(ptr);
         while (remaining > 0) {
             local_freqs[*byte_ptr]++;
             byte_ptr++;

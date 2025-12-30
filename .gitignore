@@ -14,3 +14,10 @@ assignment/artifacts/*
 coverage
 
 .envrc
+
+# benchmark files
+.benchmarks
+compression_benchmark_results.json
+compression_ratio_results.csv
+compression_ratio_plot.png
+benchmark_compression.sh
