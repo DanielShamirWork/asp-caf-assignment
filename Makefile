@@ -1,7 +1,7 @@
 # === Variables ===
 CONTAINER_NAME = caf-dev-container
 IMAGE_NAME = caf-dev-image
-WORKSPACE_DIR ?= $(PWD)
+WORKSPACE_DIR ?= "$(PWD)"
 ENABLE_COVERAGE ?= 0
 DOCKER_MEMORY ?= 8g
 DOCKER_MEMORY_SWAP ?= 8g

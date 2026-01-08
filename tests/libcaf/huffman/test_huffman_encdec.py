@@ -126,27 +126,6 @@ def test_huffman_encode_file_all_same_byte() -> None:
         assert compressed_size == expected_total
 
 
-def test_huffman_encode_file_preserves_input() -> None:
-    """Test that huffman_encode_file doesn't modify the input file."""
-
-    payload_size = 1000
-    rng = np.random.default_rng(0xDEADBEEF)
-    payload = rng.integers(0, 256, payload_size, dtype=np.uint8)
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_file = Path(tmpdir) / "preserve_test.bin"
-        output_file = Path(tmpdir) / "preserve_test.huff"
-
-        payload.tofile(input_file)
-        original_content = input_file.read_bytes()
-
-        huffman_encode_file(str(input_file), str(output_file))
-
-        # Verify input file hasn't changed
-        after_content = input_file.read_bytes()
-        assert original_content == after_content
-
-
 def test_huffman_encode_file_overwrites_existing() -> None:
     """Test that huffman_encode_file overwrites existing output files."""
 

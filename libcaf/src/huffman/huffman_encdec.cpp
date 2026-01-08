@@ -26,30 +26,30 @@ uint64_t calculate_compressed_size_in_bits(const std::array<uint64_t, 256>& hist
     return total_bits;
 }
 
-void huffman_encode_span(const std::span<const std::byte> from, const std::span<std::byte> to, const std::array<std::vector<bool>, 256>& dict) {
-    uint64_t bit_position = 0;
+void huffman_encode_span(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict) {
+    uint64_t bitstream_position = 0;
 
-    for (size_t i = 0; i < from.size(); ++i) {
-        uint8_t byte = static_cast<uint8_t>(from[i]);
+    for (size_t i = 0; i < source.size(); ++i) {
+        uint8_t byte = static_cast<uint8_t>(source[i]);
         const std::vector<bool>& code = dict[byte];
 
         for (size_t j = 0; j < code.size(); ++j) {
-            size_t bit_index = bit_position;
-            size_t byte_index = bit_index / 8;
-            size_t bit_offset = 7 - (bit_index % 8); // Store bits from MSB to LSB
+            size_t bit_idx_in_current_byte = bitstream_position;
+            size_t byte_idx = bit_idx_in_current_byte / 8;
+            size_t bit_offset = 7 - (bit_idx_in_current_byte % 8); // Store bits from MSB to LSB
 
             // assume span is zeroed, so only set bits when code[j] is true
             std::byte code_bit = code[j] ? std::byte{1} : std::byte{0};
-            to[byte_index] |= static_cast<std::byte>(code_bit << bit_offset);
+            destination[byte_idx] |= static_cast<std::byte>(code_bit << bit_offset);
 
-            bit_position++;
+            bitstream_position++;
         }
     }
 }
 
-void huffman_encode_span_parallel(const std::span<const std::byte> from, const std::span<std::byte> to, const std::array<std::vector<bool>, 256>& dict) {
+void huffman_encode_span_parallel(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict) {
     const int num_threads = omp_get_max_threads();
-    const size_t chunk_size = (from.size() + num_threads - 1) / num_threads;
+    const size_t chunk_size = (source.size() + num_threads - 1) / num_threads;
 
     // Per-thread buffers to hold encoded chunks
     std::vector<std::vector<std::byte>> thread_buffers(num_threads);
@@ -59,13 +59,13 @@ void huffman_encode_span_parallel(const std::span<const std::byte> from, const s
     {
         int thread_id = omp_get_thread_num();
         const size_t start = thread_id * chunk_size;
-        const size_t end = std::min(start + chunk_size, from.size());
+        const size_t end = std::min(start + chunk_size, source.size());
 
         if (start < end) {
             // Calculate size needed for this chunk
             uint64_t chunk_bits = 0;
             for (size_t i = start; i < end; ++i) {
-                uint8_t byte = static_cast<uint8_t>(from[i]);
+                uint8_t byte = static_cast<uint8_t>(source[i]);
                 chunk_bits += dict[byte].size();
             }
             thread_bit_sizes[thread_id] = chunk_bits;
@@ -75,20 +75,20 @@ void huffman_encode_span_parallel(const std::span<const std::byte> from, const s
             thread_buffers[thread_id].resize(chunk_bytes, std::byte{0});
 
             // Encode this chunk
-            uint64_t bit_position = 0;
+            uint64_t bitstream_position = 0;
             for (size_t i = start; i < end; ++i) {
-                uint8_t byte = static_cast<uint8_t>(from[i]);
+                uint8_t byte = static_cast<uint8_t>(source[i]);
                 const std::vector<bool>& code = dict[byte];
 
                 for (size_t j = 0; j < code.size(); ++j) {
-                    size_t bit_index = bit_position;
-                    size_t byte_index = bit_index / 8;
-                    size_t bit_offset = 7 - (bit_index % 8);
+                    size_t bit_idx_in_current_byte = bitstream_position;
+                    size_t byte_idx = bit_idx_in_current_byte / 8;
+                    size_t bit_offset = 7 - (bit_idx_in_current_byte % 8);
 
                     std::byte code_bit = code[j] ? std::byte{1} : std::byte{0};
-                    thread_buffers[thread_id][byte_index] |= static_cast<std::byte>(code_bit << bit_offset);
+                    thread_buffers[thread_id][byte_idx] |= static_cast<std::byte>(code_bit << bit_offset);
 
-                    bit_position++;
+                    bitstream_position++;
                 }
             }
         }
@@ -116,7 +116,7 @@ void huffman_encode_span_parallel(const std::span<const std::byte> from, const s
 
             // Write bit to destination
             if (bit != std::byte{0}) {
-                to[dst_byte_idx] |= static_cast<std::byte>(std::byte{1} << dst_bit_offset);
+                destination[dst_byte_idx] |= static_cast<std::byte>(std::byte{1} << dst_bit_offset);
             }
         }
 

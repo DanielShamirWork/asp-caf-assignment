@@ -15,7 +15,6 @@ def pytest_sessionstart(session):
 
 
 def pytest_benchmark_generate_json(config, benchmarks, machine_info):
-    # Store benchmarks in session stash
     session = config.stash.get(session_key, None)
     session.stash["huffman_benchmarks"] = benchmarks
 
@@ -25,19 +24,15 @@ def pytest_sessionfinish(session, exitstatus):
     if not benchmarks_data:
         return
 
-    # Extract sizes and times for all functions
     histogram_times = {}
     parallel_times = {}
     parallel_64bit_times = {}
     fast_times = {}
-
-    # Extract compression ratio data
     compression_data = {}  # {data_type: {payload_size: [ratios]}}
 
     for bench in benchmarks_data:
         name = bench["name"]
 
-        # Handle existing huffman tree benchmarks
         if "test_benchmark_huffman_tree" in name:
             param = bench["params"]["payload_size"]
             if "histogram_fast" in name:
@@ -49,12 +44,9 @@ def pytest_sessionfinish(session, exitstatus):
             elif "histogram" in name:
                 histogram_times[param] = bench["stats"].mean
 
-        # Handle compression ratio benchmarks
         elif "test_compression_ratio" in name:
             data_type = bench["params"]["data_type"]
             payload_size = bench["params"]["payload_size"]
-
-            # Get the compression ratio from extra_info
             if "ratio" in bench["extra_info"]:
                 ratio = bench["extra_info"]["ratio"]
 
@@ -65,20 +57,15 @@ def pytest_sessionfinish(session, exitstatus):
 
                 compression_data[data_type][payload_size].append(ratio)
 
-    # Generate huffman tree benchmark plots (existing functionality)
     if histogram_times and fast_times:
-        # Assume sizes are the same for all
         sizes = sorted(histogram_times.keys())
 
-        # Calculate speedup ratios vs baseline
         speedups_parallel = [histogram_times[s] / parallel_times[s] if s in parallel_times else 1.0 for s in sizes]
         speedups_parallel_64bit = [histogram_times[s] / parallel_64bit_times[s] if s in parallel_64bit_times else 1.0 for s in sizes]
         speedups_fast = [histogram_times[s] / fast_times[s] for s in sizes]
 
-        # Plot with two subplots
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), height_ratios=[2, 1])
 
-        # Top plot: timing comparison (log scale)
         ax1.loglog(sizes, [histogram_times[s] for s in sizes], marker='o', linestyle='-', label='histogram (baseline)')
         if parallel_times:
             ax1.loglog(sizes, [parallel_times.get(s, float('nan')) for s in sizes], marker='^', linestyle='--', label='histogram_parallel')
@@ -93,7 +80,6 @@ def pytest_sessionfinish(session, exitstatus):
         ax1.xaxis.set_major_formatter(FuncFormatter(lambda x, pos: humanize.naturalsize(x)))
         ax1.set_xlim(min(sizes), max(sizes))
 
-        # Bottom plot: speedup ratio (linear scale)
         if parallel_times:
             ax2.semilogx(sizes, speedups_parallel, marker='^', linestyle='--', color='orange', linewidth=2, label='parallel')
         if parallel_64bit_times:
@@ -112,11 +98,13 @@ def pytest_sessionfinish(session, exitstatus):
         ax2.set_ylim(0, max(all_speedups) * 1.1)
 
         plt.tight_layout()
-        fig.savefig('huffman_benchmark_plot.png', dpi=150)
+        output_dir = Path('.benchmarks')
+        output_dir.mkdir(exist_ok=True)
+        plot_path = output_dir / 'huffman_benchmark_plot.png'
+        fig.savefig(plot_path, dpi=150)
         plt.close(fig)
-        print("Benchmark plot saved to huffman_benchmark_plot.png")
+        print(f"Benchmark plot saved to {plot_path}")
 
-    # Generate compression ratio report and plot
     if compression_data:
         _generate_compression_ratio_report(compression_data)
 
@@ -124,7 +112,6 @@ def pytest_sessionfinish(session, exitstatus):
 def _generate_compression_ratio_report(compression_data):
     """Generate CSV and plot for compression ratio benchmarks."""
 
-    # Calculate mean and variance for each data type and size
     stats_data = {}
     for data_type, size_dict in compression_data.items():
         stats_data[data_type] = {}
@@ -137,8 +124,9 @@ def _generate_compression_ratio_report(compression_data):
                 'std': np.sqrt(var_ratio)
             }
 
-    # Write CSV file
-    csv_path = Path('compression_ratio_results.csv')
+    output_dir = Path('.benchmarks')
+    output_dir.mkdir(exist_ok=True)
+    csv_path = output_dir / 'compression_ratio_results.csv'
     with open(csv_path, 'w', newline='') as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(['Data Type', 'Payload Size (bytes)', 'Payload Size (human)', 'Mean Compression Ratio', 'Variance', 'Std Dev'])
@@ -157,7 +145,6 @@ def _generate_compression_ratio_report(compression_data):
 
     print(f"Compression ratio results saved to {csv_path}")
 
-    # Create plot
     fig, ax = plt.subplots(figsize=(12, 7))
 
     colors = {'random': 'blue', 'repetitive': 'green', 'uniform': 'red'}
@@ -171,12 +158,10 @@ def _generate_compression_ratio_report(compression_data):
         color = colors.get(data_type, 'gray')
         marker = markers.get(data_type, 'x')
 
-        # Plot mean with error bars
         ax.errorbar(sizes, means, yerr=stds, marker=marker, linestyle='-',
                    linewidth=2, markersize=8, capsize=5, capthick=2,
                    color=color, label=data_type.capitalize())
 
-    # Add horizontal line at ratio = 1.0 (no compression)
     ax.axhline(y=1.0, color='gray', linestyle='--', alpha=0.5, label='No compression (ratio = 1.0)')
 
     ax.set_xlabel('Payload Size', fontsize=12)
@@ -187,7 +172,6 @@ def _generate_compression_ratio_report(compression_data):
     ax.legend(fontsize=10)
     ax.xaxis.set_major_formatter(FuncFormatter(lambda x, pos: humanize.naturalsize(x)))
 
-    # Set y-axis limits to better show the data
     all_means = [stats['mean'] for dt in stats_data.values() for stats in dt.values()]
     if all_means:
         y_min = max(0, min(all_means) - 0.1)
@@ -195,7 +179,7 @@ def _generate_compression_ratio_report(compression_data):
         ax.set_ylim(y_min, y_max)
 
     plt.tight_layout()
-    plot_path = Path('compression_ratio_plot.png')
+    plot_path = output_dir / 'compression_ratio_plot.png'
     fig.savefig(plot_path, dpi=150)
     plt.close(fig)
     print(f"Compression ratio plot saved to {plot_path}")
