@@ -22,6 +22,8 @@ std::vector<HuffmanNode> huffman_tree(const std::array<uint64_t, 256>& hist);
 
 // huffman_dict.cpp
 std::array<std::vector<bool>, 256> huffman_dict(const std::vector<HuffmanNode>& nodes);
+void canonicalize_huffman_dict(std::array<std::vector<bool>, 256>& dict);
+std::vector<bool> next_canonical_huffman_code(const std::vector<bool>& code);
 
 // huffman_encdec.cpp
 uint64_t calculate_compressed_size_in_bits(const std::array<uint64_t, 256>& hist, const std::array<std::vector<bool>, 256>& dict);

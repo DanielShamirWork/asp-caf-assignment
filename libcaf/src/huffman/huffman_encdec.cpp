@@ -224,8 +224,7 @@ void huffman_encode_span_parallel_twopass(const std::span<const std::byte> sourc
                     current_byte |= static_cast<uint8_t>(code[j]) << bit_offset;
                     
                     // Check if we've completed a byte (bit_offset == 0 means we just wrote the LSB)
-                    if (bit_offset == 0) {
-                        // Write the completed byte
+                    if (bit_offset == 0) { // 
                         if ((byte_idx == first_byte && first_byte_shared) ||
                             (byte_idx == last_byte && last_byte_shared)) {
                             // Use atomic for shared boundary bytes
@@ -277,13 +276,14 @@ uint64_t huffman_encode_file(const std::string& input_file, const std::string& o
 
     const std::array<uint64_t, 256> hist = histogram_parallel(input_data);
     const std::vector<HuffmanNode> tree = huffman_tree(hist);
-    const std::array<std::vector<bool>, 256> dict = huffman_dict(tree);
+    std::array<std::vector<bool>, 256> dict = huffman_dict(tree);
+    canonicalize_huffman_dict(dict);
 
     const uint64_t compressed_size_in_bits = calculate_compressed_size_in_bits(hist, dict);
     const uint64_t compressed_size_in_bytes = (compressed_size_in_bits + 7) / 8; // round up to full bytes
 
     std::vector<std::byte> compressed_data(compressed_size_in_bytes, std::byte{0});
-    huffman_encode_span_parallel(input_data, compressed_data, dict);
+    huffman_encode_span_parallel_twopass(input_data, compressed_data, dict);
 
     // create or truncate output file
     std::ofstream out(output_file, std::ios::binary | std::ios::trunc);
@@ -293,10 +293,16 @@ uint64_t huffman_encode_file(const std::string& input_file, const std::string& o
 
     // write compressed data to output file
     out.write(reinterpret_cast<const char*>(&compressed_size_in_bits), sizeof(compressed_size_in_bits)); // write compressed data size
-    out.write(reinterpret_cast<const char*>(hist.data()), hist.size() * sizeof(uint64_t)); // write histogram
+    
+    // write canonical huffman code lengths
+    for (size_t i = 0; i < 256; i++) {  
+        std::byte code_len = static_cast<std::byte>(dict[i].size());
+        out.write(reinterpret_cast<const char*>(&code_len), sizeof(code_len));
+    }   
+    
     out.write(reinterpret_cast<const char*>(compressed_data.data()), compressed_size_in_bytes); // write compressed data
     out.close();
 
-    // return total size of the compressed file, including header and histogram
-    return sizeof(uint64_t) + hist.size() * sizeof(uint64_t) + compressed_size_in_bytes;
+    // return total size of the compressed file
+    return sizeof(uint64_t) + 256 + compressed_size_in_bytes;
 }

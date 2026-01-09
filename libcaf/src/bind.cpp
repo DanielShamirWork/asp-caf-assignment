@@ -168,6 +168,13 @@ PYBIND11_MODULE(_libcaf, m) {
     // huffman_dict bindings
     m.def("huffman_dict", &huffman_dict);
 
+    m.def("canonicalize_huffman_dict", [](std::array<std::vector<bool>, 256> dict) {
+        canonicalize_huffman_dict(dict);
+        return dict;
+    }, py::arg("dict"));
+
+    m.def("next_canonical_huffman_code", &next_canonical_huffman_code, py::arg("code"));
+
     // huffman_encode_span bindings (for benchmarking different implementations)
     m.def("huffman_encode_span", [](py::array_t<uint8_t, py::array::c_style> source,
                                     py::array_t<uint8_t, py::array::c_style> destination,

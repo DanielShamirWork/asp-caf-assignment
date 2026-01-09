@@ -54,7 +54,7 @@ def test_huffman_encode_file(random_payload: np.ndarray) -> None:
         # Verify compression worked (file size check)
         # For empty files or very small files, compression might not reduce size
         # due to header overhead (8 bytes + 2048 bytes histogram = 2056 bytes)
-        header_size = 8 + 256 * 8  # uint64_t size + histogram
+        header_size = 8 + 256  # uint64_t size + code lengths for all symbols
 
         if len(random_payload) == 0:
             # Empty file should have just the header
@@ -117,8 +117,8 @@ def test_huffman_encode_file_all_same_byte() -> None:
 
         # With only one unique byte, each byte should encode to 1 bit
         # Compressed data should be: 10000 bits = 1250 bytes
-        # Total size = 8 (size header) + 2048 (histogram) + 1250 (data) = 3306 bytes
-        header_size = 8 + 256 * 8
+        # Total size = 8 (size header) + 256 (code lengths) + 1250 (data) = 1514 bytes
+        header_size = 8 + 256
         expected_data_size = (payload_size + 7) // 8  # Round up to bytes
         expected_total = header_size + expected_data_size
 
