@@ -23,6 +23,7 @@ add_library(_libcaf MODULE
     src/huffman/huffman_histogram.cpp
     src/huffman/huffman_tree.cpp
     src/huffman/huffman_dict.cpp
+    src/huffman/huffman_encdec.cpp
 )
 
 # Warnings and treat warnings as errors

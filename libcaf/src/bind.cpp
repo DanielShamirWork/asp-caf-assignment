@@ -167,4 +167,63 @@ PYBIND11_MODULE(_libcaf, m) {
 
     // huffman_dict bindings
     m.def("huffman_dict", &huffman_dict);
+
+    m.def("canonicalize_huffman_dict", [](std::array<std::vector<bool>, 256> dict) {
+        canonicalize_huffman_dict(dict);
+        return dict;
+    }, py::arg("dict"));
+
+    m.def("next_canonical_huffman_code", &next_canonical_huffman_code, py::arg("code"));
+
+    // huffman_encode_span bindings (for benchmarking different implementations)
+    m.def("huffman_encode_span", [](py::array_t<uint8_t, py::array::c_style> source,
+                                    py::array_t<uint8_t, py::array::c_style> destination,
+                                    const std::array<std::vector<bool>, 256>& dict) {
+        auto src_info = source.request();
+        auto dst_info = destination.request(true);  // writable
+        if (src_info.ndim != 1 || dst_info.ndim != 1) {
+            throw std::runtime_error("huffman_encode_span expects 1-D numpy arrays");
+        }
+        auto* src_ptr = static_cast<const std::byte*>(src_info.ptr);
+        auto* dst_ptr = static_cast<std::byte*>(dst_info.ptr);
+        huffman_encode_span(
+            std::span<const std::byte>(src_ptr, static_cast<size_t>(src_info.shape[0])),
+            std::span<std::byte>(dst_ptr, static_cast<size_t>(dst_info.shape[0])),
+            dict);
+    }, py::arg("source"), py::arg("destination"), py::arg("dict"));
+
+    m.def("huffman_encode_span_parallel", [](py::array_t<uint8_t, py::array::c_style> source,
+                                              py::array_t<uint8_t, py::array::c_style> destination,
+                                              const std::array<std::vector<bool>, 256>& dict) {
+        auto src_info = source.request();
+        auto dst_info = destination.request(true);
+        if (src_info.ndim != 1 || dst_info.ndim != 1) {
+            throw std::runtime_error("huffman_encode_span_parallel expects 1-D numpy arrays");
+        }
+        auto* src_ptr = static_cast<const std::byte*>(src_info.ptr);
+        auto* dst_ptr = static_cast<std::byte*>(dst_info.ptr);
+        huffman_encode_span_parallel(
+            std::span<const std::byte>(src_ptr, static_cast<size_t>(src_info.shape[0])),
+            std::span<std::byte>(dst_ptr, static_cast<size_t>(dst_info.shape[0])),
+            dict);
+    }, py::arg("source"), py::arg("destination"), py::arg("dict"));
+
+    m.def("huffman_encode_span_parallel_twopass", [](py::array_t<uint8_t, py::array::c_style> source,
+                                                      py::array_t<uint8_t, py::array::c_style> destination,
+                                                      const std::array<std::vector<bool>, 256>& dict) {
+        auto src_info = source.request();
+        auto dst_info = destination.request(true);
+        if (src_info.ndim != 1 || dst_info.ndim != 1) {
+            throw std::runtime_error("huffman_encode_span_parallel_twopass expects 1-D numpy arrays");
+        }
+        auto* src_ptr = static_cast<const std::byte*>(src_info.ptr);
+        auto* dst_ptr = static_cast<std::byte*>(dst_info.ptr);
+        huffman_encode_span_parallel_twopass(
+            std::span<const std::byte>(src_ptr, static_cast<size_t>(src_info.shape[0])),
+            std::span<std::byte>(dst_ptr, static_cast<size_t>(dst_info.shape[0])),
+            dict);
+    }, py::arg("source"), py::arg("destination"), py::arg("dict"));
+
+    // huffman_encdec bindings
+    m.def("huffman_encode_file", &huffman_encode_file);
 }
