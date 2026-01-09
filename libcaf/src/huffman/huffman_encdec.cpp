@@ -53,7 +53,7 @@ void huffman_encode_span_parallel(const std::span<const std::byte> source, const
 
     // Per-thread buffers to hold encoded chunks
     std::vector<std::vector<std::byte>> thread_buffers(num_threads);
-    std::vector<uint64_t> thread_bit_sizes(num_threads, 0);
+    std::vector<uint64_t> thread_code_lengths(num_threads, 0);
 
     #pragma omp parallel
     {
@@ -68,7 +68,7 @@ void huffman_encode_span_parallel(const std::span<const std::byte> source, const
                 uint8_t byte = static_cast<uint8_t>(source[i]);
                 chunk_bits += dict[byte].size();
             }
-            thread_bit_sizes[thread_id] = chunk_bits;
+            thread_code_lengths[thread_id] = chunk_bits;
 
             // Allocate buffer for this chunk
             const size_t chunk_bytes = (chunk_bits + 7) / 8;
@@ -97,7 +97,7 @@ void huffman_encode_span_parallel(const std::span<const std::byte> source, const
     // Combine all thread buffers into the output buffer
     uint64_t current_bit_offset = 0;
     for (int t = 0; t < num_threads; ++t) {
-        const uint64_t chunk_bits = thread_bit_sizes[t];
+        const uint64_t chunk_bits = thread_code_lengths[t];
         if (chunk_bits == 0) continue;
 
         const auto& thread_buffer = thread_buffers[t];
@@ -121,6 +121,61 @@ void huffman_encode_span_parallel(const std::span<const std::byte> source, const
         }
 
         current_bit_offset += chunk_bits;
+    }
+}
+
+// In order to avoid joining/copying at the end, we calculate the code lengths one pass and then write directly to the destination a second pass
+void huffman_encode_span_parallel_twopass(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict) {
+    const int num_threads = omp_get_max_threads();
+    const size_t chunk_size = (source.size() + num_threads - 1) / num_threads;
+
+    std::vector<uint64_t> thread_code_lengths(num_threads, 0);
+    std::vector<uint64_t> thread_bit_offsets(num_threads, 0);
+
+    // Pass 1: calculate the code lengths for each thread
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        const size_t start = thread_id * chunk_size;
+        const size_t end = std::min(start + chunk_size, source.size());
+
+        uint64_t chunk_bits = 0;
+        for (size_t i = start; i < end; ++i) {
+            uint8_t byte = static_cast<uint8_t>(source[i]);
+            chunk_bits += dict[byte].size();
+        }
+        thread_code_lengths[thread_id] = chunk_bits;
+    }
+
+    // calculate the bit offsets to the start of each write thread's chunk
+    for (int t = 1; t < num_threads; ++t) {
+        thread_bit_offsets[t] = thread_bit_offsets[t - 1] + thread_code_lengths[t - 1];
+    }
+
+    // Pass 2: write the compressed data
+    #pragma omp parallel
+    {
+        int thread_id = omp_get_thread_num();
+        const size_t start = thread_id * chunk_size;
+        const size_t end = std::min(start + chunk_size, source.size());
+
+        uint64_t bitstream_position = thread_bit_offsets[thread_id];
+
+        for (size_t i = start; i < end; ++i) {
+            uint8_t byte = static_cast<uint8_t>(source[i]);
+            const std::vector<bool>& code = dict[byte];
+
+            for (size_t j = 0; j < code.size(); ++j) {
+                size_t byte_idx = bitstream_position / 8;
+                size_t bit_offset = 7 - (bitstream_position % 8);
+
+                uint8_t bit_value = static_cast<uint8_t>(code[j]) << bit_offset;
+                #pragma omp atomic
+                reinterpret_cast<uint8_t&>(destination[byte_idx]) |= bit_value;
+
+                bitstream_position++;
+            }
+        }
     }
 }
 

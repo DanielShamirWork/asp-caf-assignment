@@ -30,6 +30,11 @@ def pytest_sessionfinish(session, exitstatus):
     fast_times = {}
     compression_data = {}  # {data_type: {payload_size: [ratios]}}
 
+    # Encode span benchmark data
+    encode_sequential_times = {}
+    encode_parallel_times = {}
+    encode_twopass_times = {}
+
     for bench in benchmarks_data:
         name = bench["name"]
 
@@ -56,6 +61,15 @@ def pytest_sessionfinish(session, exitstatus):
                     compression_data[data_type][payload_size] = []
 
                 compression_data[data_type][payload_size].append(ratio)
+
+        elif "test_benchmark_huffman_encode_span" in name:
+            param = bench["params"]["payload_size"]
+            if "parallel_twopass" in name:
+                encode_twopass_times[param] = bench["stats"].mean
+            elif "parallel" in name:
+                encode_parallel_times[param] = bench["stats"].mean
+            elif "sequential" in name:
+                encode_sequential_times[param] = bench["stats"].mean
 
     if histogram_times and fast_times:
         sizes = sorted(histogram_times.keys())
@@ -105,8 +119,62 @@ def pytest_sessionfinish(session, exitstatus):
         plt.close(fig)
         print(f"Benchmark plot saved to {plot_path}")
 
+    if encode_sequential_times:
+        _generate_encode_span_report(encode_sequential_times, encode_parallel_times, encode_twopass_times)
+
     if compression_data:
         _generate_compression_ratio_report(compression_data)
+
+
+def _generate_encode_span_report(sequential_times, parallel_times, twopass_times):
+    """Generate plot for huffman_encode_span benchmark comparing implementations."""
+
+    sizes = sorted(sequential_times.keys())
+
+    # Calculate speedup ratios vs sequential baseline
+    speedups_parallel = [sequential_times[s] / parallel_times[s] if s in parallel_times else 1.0 for s in sizes]
+    speedups_twopass = [sequential_times[s] / twopass_times[s] if s in twopass_times else 1.0 for s in sizes]
+
+    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), height_ratios=[2, 1])
+
+    # Top plot: timing comparison (log scale)
+    ax1.loglog(sizes, [sequential_times[s] for s in sizes], marker='o', linestyle='-', label='sequential (baseline)')
+    if parallel_times:
+        ax1.loglog(sizes, [parallel_times.get(s, float('nan')) for s in sizes], marker='^', linestyle='--', label='parallel')
+    if twopass_times:
+        ax1.loglog(sizes, [twopass_times.get(s, float('nan')) for s in sizes], marker='s', linestyle='-', label='parallel_twopass')
+    ax1.set_xlabel('Payload Size')
+    ax1.set_ylabel('Time (seconds)')
+    ax1.set_title('Huffman Encode Span Benchmark')
+    ax1.grid(True)
+    ax1.legend()
+    ax1.xaxis.set_major_formatter(FuncFormatter(lambda x, pos: humanize.naturalsize(x)))
+    ax1.set_xlim(min(sizes), max(sizes))
+
+    # Bottom plot: speedup ratio (linear scale)
+    if parallel_times:
+        ax2.semilogx(sizes, speedups_parallel, marker='^', linestyle='--', color='orange', linewidth=2, label='parallel')
+    if twopass_times:
+        ax2.semilogx(sizes, speedups_twopass, marker='s', linestyle='-', color='green', linewidth=2, label='parallel_twopass')
+    ax2.axhline(y=1.0, color='gray', linestyle='--', alpha=0.7, label='No speedup')
+    ax2.set_xlabel('Payload Size')
+    ax2.set_ylabel('Speedup (x)')
+    ax2.set_title('Speedup Ratio vs sequential (baseline)')
+    ax2.grid(True)
+    ax2.legend()
+    ax2.xaxis.set_major_formatter(FuncFormatter(lambda x, pos: humanize.naturalsize(x)))
+    ax2.set_xlim(min(sizes), max(sizes))
+    all_speedups = (speedups_parallel if parallel_times else []) + (speedups_twopass if twopass_times else [])
+    if all_speedups:
+        ax2.set_ylim(0, max(max(all_speedups) * 1.1, 2.0))
+
+    plt.tight_layout()
+    output_dir = Path('.benchmarks')
+    output_dir.mkdir(exist_ok=True)
+    plot_path = output_dir / 'huffman_encode_span_benchmark_plot.png'
+    fig.savefig(plot_path, dpi=150)
+    plt.close(fig)
+    print(f"Encode span benchmark plot saved to {plot_path}")
 
 
 def _generate_compression_ratio_report(compression_data):
