@@ -52,6 +52,9 @@ PYBIND11_MODULE(_libcaf, m) {
     m.def("delete_content", delete_content);
     m.def("open_content_for_reading", open_content_for_reading);
 
+    // huffman constants
+    m.attr("HUFFMAN_HEADER_SIZE") = HUFFMAN_HEADER_SIZE;
+
     // hash_types
     m.def("hash_object", py::overload_cast<const Blob&>(&hash_object), py::arg("blob"));
     m.def("hash_object", py::overload_cast<const Tree&>(&hash_object), py::arg("tree"));
@@ -174,6 +177,17 @@ PYBIND11_MODULE(_libcaf, m) {
     }, py::arg("dict"));
 
     m.def("next_canonical_huffman_code", &next_canonical_huffman_code, py::arg("code"));
+
+    m.def("calculate_compressed_size_in_bits", [](py::array_t<uint64_t, py::array::c_style> hist,
+                                                   const std::array<std::vector<bool>, 256>& dict) {
+        auto info = hist.request();
+        if (info.ndim != 1 || info.shape[0] != 256) {
+            throw std::runtime_error("calculate_compressed_size_in_bits expects a 1-D numpy array of size 256");
+        }
+        std::array<uint64_t, 256> hist_arr;
+        std::memcpy(hist_arr.data(), info.ptr, 256 * sizeof(uint64_t));
+        return calculate_compressed_size_in_bits(hist_arr, dict);
+    }, py::arg("hist"), py::arg("dict"));
 
     // huffman_encode_span bindings (for benchmarking different implementations)
     m.def("huffman_encode_span", [](py::array_t<uint8_t, py::array::c_style> source,

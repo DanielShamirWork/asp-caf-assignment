@@ -15,6 +15,7 @@ def pytest_sessionstart(session):
 
 
 def pytest_benchmark_generate_json(config, benchmarks, machine_info):
+    # Store benchmarks in session stash
     session = config.stash.get(session_key, None)
     session.stash["huffman_benchmarks"] = benchmarks
 
@@ -24,6 +25,7 @@ def pytest_sessionfinish(session, exitstatus):
     if not benchmarks_data:
         return
 
+    # Extract sizes and times for all functions
     histogram_times = {}
     parallel_times = {}
     parallel_64bit_times = {}
@@ -50,17 +52,17 @@ def pytest_sessionfinish(session, exitstatus):
                 histogram_times[param] = bench["stats"].mean
 
         elif "test_compression_ratio" in name:
-            data_type = bench["params"]["data_type"]
+            payload_type = bench["params"]["payload_type"]
             payload_size = bench["params"]["payload_size"]
             if "ratio" in bench["extra_info"]:
                 ratio = bench["extra_info"]["ratio"]
 
-                if data_type not in compression_data:
-                    compression_data[data_type] = {}
-                if payload_size not in compression_data[data_type]:
-                    compression_data[data_type][payload_size] = []
+                if payload_type not in compression_data:
+                    compression_data[payload_type] = {}
+                if payload_size not in compression_data[payload_type]:
+                    compression_data[payload_type][payload_size] = []
 
-                compression_data[data_type][payload_size].append(ratio)
+                compression_data[payload_type][payload_size].append(ratio)
 
         elif "test_benchmark_huffman_encode_span" in name:
             param = bench["params"]["payload_size"]

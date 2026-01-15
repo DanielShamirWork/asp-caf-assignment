@@ -26,6 +26,22 @@ void canonicalize_huffman_dict(std::array<std::vector<bool>, 256>& dict);
 std::vector<bool> next_canonical_huffman_code(const std::vector<bool>& code);
 
 // huffman_encdec.cpp
+
+/*
+    huffman compressed file layout:
+    
+    [8 bytes]   : uint64_t original file size
+    [8 bytes]   : uint64_t compressed data size (in bits)
+    [512 bytes] : code lengths (256 * sizeof(uint16_t))
+    [n bytes]   : compressed data
+*/
+struct HuffmanHeader {
+    uint64_t original_file_size;
+    uint64_t compressed_data_size;
+    std::array<uint16_t, 256> code_lengths;
+};
+constexpr size_t HUFFMAN_HEADER_SIZE = sizeof(HuffmanHeader);
+
 uint64_t calculate_compressed_size_in_bits(const std::array<uint64_t, 256>& hist, const std::array<std::vector<bool>, 256>& dict);
 void huffman_encode_span(const std::span<const std::byte> from, const std::span<std::byte> to, const std::array<std::vector<bool>, 256>& dict);
 void huffman_encode_span_parallel(const std::span<const std::byte> from, const std::span<std::byte> to, const std::array<std::vector<bool>, 256>& dict);

@@ -2,6 +2,7 @@ import numpy as np
 from pytest import mark
 
 from libcaf import (
+    calculate_compressed_size_in_bits,
     histogram,
     huffman_tree,
     huffman_dict,
@@ -29,14 +30,6 @@ SIZES = [
     2 ** 29,  # 512 MiB
     2 ** 30,  # 1 GiB
 ]
-
-
-def calculate_compressed_size_in_bits(hist: np.ndarray, dict_codes: list) -> int:
-    """Calculate the total number of bits needed for compressed data."""
-    total_bits = 0
-    for i in range(256):
-        total_bits += hist[i] * len(dict_codes[i])
-    return total_bits
 
 
 @mark.parametrize('encode_func', [

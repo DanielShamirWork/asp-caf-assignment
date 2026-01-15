@@ -6,14 +6,12 @@
 #include <algorithm>
 #include <omp.h>
 #include <cstring>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 
-/*
-    huffman compressed file layout:
-    
-    [8 bytes]   : uint64_t compressed data size (excluding this header and histogram)
-    [2048 bytes]: histogram (256 * sizeof(uint64_t))
-    [n bytes]   : compressed data
-*/
+#define MAX_CODE_LEN 9 // there can be 511 possible codes so 9 bits are needed to represent them
 
 uint64_t calculate_compressed_size_in_bits(const std::array<uint64_t, 256>& hist, const std::array<std::vector<bool>, 256>& dict) {
     uint64_t total_bits = 0;
@@ -46,6 +44,53 @@ void huffman_encode_span(const std::span<const std::byte> source, const std::spa
         }
     }
 }
+
+std::array<uint16_t, 511> huffman_build_reverse_dict(const std::array<std::vector<bool>, 256>& dict, const size_t max_code_len) {
+    std::array<uint16_t, 511> reverse_dict;
+
+    for (size_t symbol = 0; symbol < 256; symbol++) {
+        const std::vector<bool>& code = dict[symbol];
+        size_t len = code.size();
+        if(len == 0)
+            continue;
+
+        uint16_t symbol_code = 0;
+        for (size_t i = 0; i < len; ++i) {
+            symbol_code |= code[i] << i;
+        }
+
+        // For a bit string of length len, the prefix uniquely defines the symbol
+        // so we can have multiple entries that all point to the same symbol
+        // without conflicts
+        // e.g. if 'A' has huffman code 00 then
+        // [0000] => 'A', [0001] => 'A', [0010] => 'A', [0011] => 'A'
+        uint64_t num_entries = (1 << (max_code_len - len));
+
+        for (size_t i = 0; i < num_entries; ++i) {
+            reverse_dict[symbol_code | i] = symbol;
+        }
+    }
+
+    return reverse_dict;
+}
+
+// void huffman_decode_span(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict) {
+//     uint64_t bitstream_position = 0;
+
+//     std::array<uint16_t, 511> reverse_dict = huffman_build_reverse_dict(dict, MAX_CODE_LEN);
+
+//     for (size_t i = 0; i < source.size(); ++i) {
+//         uint16_t double_byte = static_cast<uint16_t>(source[i]);
+//         uint16_t symbol_code = double_byte << 8;
+//         symbol_code |= static_cast<uint16_t>(source[i + 1]);
+
+//         for (size_t j = 0; j < code.size(); ++j) {
+            
+            
+//             bitstream_position++;
+//         }
+//     }
+// }
 
 void huffman_encode_span_parallel(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict) {
     const int num_threads = omp_get_max_threads();
@@ -257,23 +302,22 @@ void huffman_encode_span_parallel_twopass(const std::span<const std::byte> sourc
 
 uint64_t huffman_encode_file(const std::string& input_file, const std::string& output_file) {
     // read input file
-    std::ifstream in(input_file, std::ios::binary | std::ios::ate);
-    if (!in) {
+    int fd = open(input_file.c_str(), O_RDONLY);
+    if (fd < 0)
         throw std::runtime_error("Failed to open input file");
-    }
 
-    const uint64_t file_size = in.tellg();
-    in.seekg(0, std::ios::beg);
+    struct stat file_stat;
+    if (fstat(fd, &file_stat) < 0)
+        throw std::runtime_error("Failed to get file size");
 
-    std::vector<std::byte> input_data;
-    input_data.resize(file_size);
+    size_t file_size = file_stat.st_size;
+    void *ptr = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    close(fd);
 
-    // read entire file, we need to do that to build the histogram
-    if (!in.read(reinterpret_cast<char*>(input_data.data()), file_size)) {
-        throw std::runtime_error("Failed to read input file");
-    } 
-    in.close();
+    if (ptr == MAP_FAILED)
+        throw std::runtime_error("Failed to map file");
 
+    std::span<const std::byte> input_data(static_cast<const std::byte*>(ptr), file_size);
     const std::array<uint64_t, 256> hist = histogram_parallel(input_data);
     const std::vector<HuffmanNode> tree = huffman_tree(hist);
     std::array<std::vector<bool>, 256> dict = huffman_dict(tree);
@@ -283,7 +327,7 @@ uint64_t huffman_encode_file(const std::string& input_file, const std::string& o
     const uint64_t compressed_size_in_bytes = (compressed_size_in_bits + 7) / 8; // round up to full bytes
 
     std::vector<std::byte> compressed_data(compressed_size_in_bytes, std::byte{0});
-    huffman_encode_span_parallel_twopass(input_data, compressed_data, dict);
+    huffman_encode_span(input_data, compressed_data, dict);
 
     // create or truncate output file
     std::ofstream out(output_file, std::ios::binary | std::ios::trunc);
@@ -291,18 +335,18 @@ uint64_t huffman_encode_file(const std::string& input_file, const std::string& o
         throw std::runtime_error("Failed to open output file");
     }
 
+    HuffmanHeader header;
+    header.original_file_size = file_size;
+    header.compressed_data_size = compressed_size_in_bits;
+    for (size_t i = 0; i < 256; i++) {
+        header.code_lengths[i] = dict[i].size();
+    }
+
     // write compressed data to output file
-    out.write(reinterpret_cast<const char*>(&compressed_size_in_bits), sizeof(compressed_size_in_bits)); // write compressed data size
-    
-    // write canonical huffman code lengths
-    for (size_t i = 0; i < 256; i++) {  
-        std::byte code_len = static_cast<std::byte>(dict[i].size());
-        out.write(reinterpret_cast<const char*>(&code_len), sizeof(code_len));
-    }   
-    
+    out.write(reinterpret_cast<const char*>(&header), sizeof(HuffmanHeader));
     out.write(reinterpret_cast<const char*>(compressed_data.data()), compressed_size_in_bytes); // write compressed data
     out.close();
 
     // return total size of the compressed file
-    return sizeof(uint64_t) + 256 + compressed_size_in_bytes;
+    return sizeof(HuffmanHeader) + compressed_size_in_bytes;
 }

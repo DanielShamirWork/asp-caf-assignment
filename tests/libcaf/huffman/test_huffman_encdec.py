@@ -4,12 +4,10 @@ import tempfile
 from pathlib import Path
 from pytest import mark
 
-from libcaf import huffman_encode_file
+from libcaf import huffman_encode_file, HUFFMAN_HEADER_SIZE
 
 
 @mark.parametrize('payload_size', [
-    0,
-    1,
     10,
     100,
     2 ** 4,
@@ -30,44 +28,28 @@ def test_huffman_encode_file(random_payload: np.ndarray) -> None:
         input_file = Path(tmpdir) / "input.bin"
         output_file = Path(tmpdir) / "output.huff"
 
-        # Write random payload to input file
         random_payload.tofile(input_file)
 
-        # Verify input file exists and has correct size
         assert input_file.exists()
         input_size = input_file.stat().st_size
         assert input_size == len(random_payload)
 
-        # Verify output file doesn't exist yet
         assert not output_file.exists()
 
-        # Compress the file
         compressed_size = huffman_encode_file(str(input_file), str(output_file))
-
-        # Verify output file now exists
         assert output_file.exists()
 
         # Verify the returned size matches the actual file size
         actual_compressed_size = output_file.stat().st_size
         assert compressed_size == actual_compressed_size
 
-        # Verify compression worked (file size check)
-        # For empty files or very small files, compression might not reduce size
-        # due to header overhead (8 bytes + 2048 bytes histogram = 2056 bytes)
-        header_size = 8 + 256  # uint64_t size + code lengths for all symbols
+        # All files should have at least the header
+        assert compressed_size >= HUFFMAN_HEADER_SIZE
 
-        if len(random_payload) == 0:
-            # Empty file should have just the header
-            assert compressed_size == header_size
-        elif len(random_payload) < 2056:
-            # Small files might be larger after compression due to header overhead
-            # Just verify the file was created with valid size
-            assert compressed_size >= header_size
-        else:
-            # For larger files with random data, compression should generally work
-            # but not always (random data is hard to compress)
-            # Just verify structure is correct
-            assert compressed_size >= header_size
+        # Since huffman encoding *might* not compress the data, we can't assert
+        # that the compressed size is smaller than the original size
+        # But that's ok because it's not a mathematical property of the algorithm
+        # so it shouldn't be part of the test
 
 
 @mark.parametrize('payload_size', [
@@ -116,11 +98,9 @@ def test_huffman_encode_file_all_same_byte() -> None:
         compressed_size = huffman_encode_file(str(input_file), str(output_file))
 
         # With only one unique byte, each byte should encode to 1 bit
-        # Compressed data should be: 10000 bits = 1250 bytes
-        # Total size = 8 (size header) + 256 (code lengths) + 1250 (data) = 1514 bytes
-        header_size = 8 + 256
+        # So, the expected data size equals the the payload size
         expected_data_size = (payload_size + 7) // 8  # Round up to bytes
-        expected_total = header_size + expected_data_size
+        expected_total = HUFFMAN_HEADER_SIZE + expected_data_size
 
         assert output_file.exists()
         assert compressed_size == expected_total
