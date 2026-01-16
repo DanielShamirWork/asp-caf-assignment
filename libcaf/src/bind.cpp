@@ -2,6 +2,7 @@
 #include "hash_types.h"
 #include "object_io.h"
 #include "huffman/huffman.h"
+#include "util/bitreader.h"
 
 #include <span>
 #include <stdexcept>
@@ -41,6 +42,20 @@ namespace pybind11 { namespace detail {
 
 using namespace std;
 namespace py = pybind11;
+
+// Helper to convert py::buffer to std::span (requires C++20)
+BitReader create_reader(py::buffer b, size_t data_size_in_bits) {
+    py::buffer_info info = b.request();
+    if (info.format != py::format_descriptor<uint8_t>::format()) {
+        throw std::runtime_error("Incompatible buffer format!");
+    }
+    // Create span from the buffer's raw pointer
+    auto span = std::span<const std::byte>(
+        static_cast<const std::byte*>(info.ptr), 
+        static_cast<size_t>(info.size)
+    );
+    return BitReader(span, data_size_in_bits);
+}
 
 PYBIND11_MODULE(_libcaf, m) {
     // caf
@@ -206,6 +221,26 @@ PYBIND11_MODULE(_libcaf, m) {
             dict);
     }, py::arg("source"), py::arg("destination"), py::arg("dict"));
 
+    m.def("huffman_build_reverse_dict", &huffman_build_reverse_dict, py::arg("dict"), py::arg("max_code_len"));
+
+    m.def("huffman_decode_span", [](py::array_t<uint8_t, py::array::c_style> source,
+                                    const size_t source_size_in_bits,
+                                    py::array_t<uint8_t, py::array::c_style> destination,
+                                    const std::array<std::vector<bool>, 256>& dict) {
+        auto src_info = source.request();
+        auto dst_info = destination.request(true);
+        if (src_info.ndim != 1 || dst_info.ndim != 1) {
+            throw std::runtime_error("huffman_decode_span expects 1-D numpy arrays");
+        }
+        auto* src_ptr = static_cast<const std::byte*>(src_info.ptr);
+        auto* dst_ptr = static_cast<std::byte*>(dst_info.ptr);
+        huffman_decode_span(
+            std::span<const std::byte>(src_ptr, static_cast<size_t>(src_info.shape[0])),
+            source_size_in_bits,
+            std::span<std::byte>(dst_ptr, static_cast<size_t>(dst_info.shape[0])),
+            dict);
+    }, py::arg("source"), py::arg("source_size_in_bits"), py::arg("destination"), py::arg("dict"));
+
     m.def("huffman_encode_span_parallel", [](py::array_t<uint8_t, py::array::c_style> source,
                                               py::array_t<uint8_t, py::array::c_style> destination,
                                               const std::array<std::vector<bool>, 256>& dict) {
@@ -240,4 +275,14 @@ PYBIND11_MODULE(_libcaf, m) {
 
     // huffman_encdec bindings
     m.def("huffman_encode_file", &huffman_encode_file);
+
+    // Utils bindings
+    py::class_<BitReader>(m, "BitReader")
+        .def(py::init(&create_reader), 
+             py::arg("data"), 
+             py::arg("data_size_in_bits"),
+             py::keep_alive<1, 2>())
+        .def("read", &BitReader::read, py::arg("n_bits"))
+        .def("advance", &BitReader::advance, py::arg("n_bits"))
+        .def("done", &BitReader::done);
 }

@@ -11,6 +11,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include "../util/bitreader.h"
+
 #define MAX_CODE_LEN 9 // there can be 511 possible codes so 9 bits are needed to represent them
 
 uint64_t calculate_compressed_size_in_bits(const std::array<uint64_t, 256>& hist, const std::array<std::vector<bool>, 256>& dict) {
@@ -56,8 +58,9 @@ std::array<uint16_t, 511> huffman_build_reverse_dict(const std::array<std::vecto
 
         uint16_t symbol_code = 0;
         for (size_t i = 0; i < len; ++i) {
-            symbol_code |= code[i] << i;
+            symbol_code = (symbol_code << 1) | code[i];
         }
+        symbol_code <<= max_code_len - len;
 
         // For a bit string of length len, the prefix uniquely defines the symbol
         // so we can have multiple entries that all point to the same symbol
@@ -67,30 +70,29 @@ std::array<uint16_t, 511> huffman_build_reverse_dict(const std::array<std::vecto
         uint64_t num_entries = (1 << (max_code_len - len));
 
         for (size_t i = 0; i < num_entries; ++i) {
-            reverse_dict[symbol_code | i] = symbol;
+            reverse_dict[symbol_code + i] = symbol;
         }
     }
 
     return reverse_dict;
 }
 
-// void huffman_decode_span(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict) {
-//     uint64_t bitstream_position = 0;
+void huffman_decode_span(const std::span<const std::byte> source, const size_t source_size_in_bits, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict) {
+    std::array<uint16_t, 511> reverse_dict = huffman_build_reverse_dict(dict, MAX_CODE_LEN);
 
-//     std::array<uint16_t, 511> reverse_dict = huffman_build_reverse_dict(dict, MAX_CODE_LEN);
+    BitReader reader(source, source_size_in_bits);
+    
+    size_t dst_byte_idx = 0;
+    while (!reader.done()) {
+        uint64_t code = reader.read(MAX_CODE_LEN);
+        uint8_t symbol = reverse_dict[code];
+        size_t symbol_len = dict[symbol].size();
+        
+        destination[dst_byte_idx++] = static_cast<std::byte>(symbol);
+        reader.advance(symbol_len);
+    }
+}
 
-//     for (size_t i = 0; i < source.size(); ++i) {
-//         uint16_t double_byte = static_cast<uint16_t>(source[i]);
-//         uint16_t symbol_code = double_byte << 8;
-//         symbol_code |= static_cast<uint16_t>(source[i + 1]);
-
-//         for (size_t j = 0; j < code.size(); ++j) {
-            
-            
-//             bitstream_position++;
-//         }
-//     }
-// }
 
 void huffman_encode_span_parallel(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict) {
     const int num_threads = omp_get_max_threads();
@@ -136,13 +138,13 @@ void huffman_encode_span_parallel(const std::span<const std::byte> source, const
     }
 
     // Combine all thread buffers into the output buffer
-    uint64_t current_bit_offset = 0;
+    uint64_t cur_bit_offset = 0;
     for (int t = 0; t < num_threads; ++t) {
         const uint64_t chunk_bits = thread_code_lengths[t];
         if (chunk_bits == 0) continue;
 
         const auto& thread_buffer = thread_buffers[t];
-        const size_t dst_start_bit = current_bit_offset;
+        const size_t dst_start_bit = cur_bit_offset;
         const size_t dst_bit_in_byte = dst_start_bit % 8;
 
         if (dst_bit_in_byte == 0) { // Destination is byte-aligned - we can use memcpy for full bytes
@@ -203,7 +205,7 @@ void huffman_encode_span_parallel(const std::span<const std::byte> source, const
             }
         }
 
-        current_bit_offset += chunk_bits;
+        cur_bit_offset += chunk_bits;
     }
 }
 

@@ -43,9 +43,13 @@ struct HuffmanHeader {
 constexpr size_t HUFFMAN_HEADER_SIZE = sizeof(HuffmanHeader);
 
 uint64_t calculate_compressed_size_in_bits(const std::array<uint64_t, 256>& hist, const std::array<std::vector<bool>, 256>& dict);
-void huffman_encode_span(const std::span<const std::byte> from, const std::span<std::byte> to, const std::array<std::vector<bool>, 256>& dict);
-void huffman_encode_span_parallel(const std::span<const std::byte> from, const std::span<std::byte> to, const std::array<std::vector<bool>, 256>& dict);
-void huffman_encode_span_parallel_twopass(const std::span<const std::byte> from, const std::span<std::byte> to, const std::array<std::vector<bool>, 256>& dict);
+void huffman_encode_span(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict);
+void huffman_encode_span_parallel(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict);
+void huffman_encode_span_parallel_twopass(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict);
+
+std::array<uint16_t, 511> huffman_build_reverse_dict(const std::array<std::vector<bool>, 256>& dict, const size_t max_code_len);
+void huffman_decode_span(const std::span<const std::byte> source, const size_t source_size_in_bits, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict);
+
 uint64_t huffman_encode_file(const std::string& input_file, const std::string& output_file);
 
 #endif // HUFFMAN_H
