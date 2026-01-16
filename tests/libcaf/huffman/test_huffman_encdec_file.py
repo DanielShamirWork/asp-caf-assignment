@@ -16,10 +16,10 @@ from libcaf import huffman_encode_file, huffman_decode_file, HUFFMAN_HEADER_SIZE
     2 ** 16,
     2 ** 20,  # 1 MiB
     2 ** 24,  # 16 MiB
-    # 2 ** 26,  # 64 MiB
-    # 2 ** 28,  # 256 MiB
-    # 2 ** 30,  # 1 GiB
-    # 2 ** 32,  # 4 GiB
+    2 ** 26,  # 64 MiB
+    2 ** 28,  # 256 MiB
+    2 ** 30,  # 1 GiB
+    2 ** 32,  # 4 GiB
 ])
 def test_huffman_encode_file(random_payload: np.ndarray) -> None:
     """Test huffman_encode_file with random payloads of different sizes."""
@@ -143,10 +143,10 @@ def test_huffman_encode_file_overwrites_existing() -> None:
     2 ** 16,
     2 ** 20,  # 1 MiB
     2 ** 24,  # 16 MiB
-    # 2 ** 26,  # 64 MiB
-    # 2 ** 28,  # 256 MiB
-    # 2 ** 30,  # 1 GiB
-    # 2 ** 32,  # 4 GiB
+    2 ** 26,  # 64 MiB
+    2 ** 28,  # 256 MiB
+    2 ** 30,  # 1 GiB
+    2 ** 32,  # 4 GiB
 ])
 def test_huffman_file_encoding_decoding(random_payload: np.ndarray) -> None:
     """Test encoding a file and then decoding it back to verify data integrity."""

@@ -10,8 +10,8 @@ from libcaf import histogram, huffman_tree, huffman_dict, canonicalize_huffman_d
     2 ** 8,
     2 ** 12,
     2 ** 20,  # 1 MiB
-    # 2 ** 30,  # 1 GiB # takes too long
-    # 2 ** 32,  # 4 GiB # My computer ran out of memory on this test
+    2 ** 30,  # 1 GiB
+    2 ** 32,  # 4 GiB
 ])
 def test_huffman_dict_invariants(random_payload: np.ndarray) -> None:
     huff_hist = histogram(random_payload)
