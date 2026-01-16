@@ -11,6 +11,8 @@
 #include <unordered_map>    // for std::unordered_map
 #include <string>           // for std::string
 
+#define MAX_CODE_LEN 9 // there can be 511 possible codes so 9 bits are needed to represent them
+
 // huffman_histogram.cpp
 std::array<uint64_t, 256> histogram(std::span<const std::byte> data);
 std::array<uint64_t, 256> histogram_parallel(std::span<const std::byte> data);
@@ -47,9 +49,8 @@ void huffman_encode_span(const std::span<const std::byte> source, const std::spa
 void huffman_encode_span_parallel(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict);
 void huffman_encode_span_parallel_twopass(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict);
 
-std::array<uint16_t, 511> huffman_build_reverse_dict(const std::array<std::vector<bool>, 256>& dict, const size_t max_code_len);
+std::array<uint16_t, 512> huffman_build_reverse_dict(const std::array<std::vector<bool>, 256>& dict, const size_t max_code_len);
 void huffman_decode_span(const std::span<const std::byte> source, const size_t source_size_in_bits, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict);
 
 uint64_t huffman_encode_file(const std::string& input_file, const std::string& output_file);
-
 #endif // HUFFMAN_H

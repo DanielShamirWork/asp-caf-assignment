@@ -221,7 +221,13 @@ PYBIND11_MODULE(_libcaf, m) {
             dict);
     }, py::arg("source"), py::arg("destination"), py::arg("dict"));
 
-    m.def("huffman_build_reverse_dict", &huffman_build_reverse_dict, py::arg("dict"), py::arg("max_code_len"));
+    m.def("huffman_build_reverse_dict", 
+        [](const std::array<std::vector<bool>, 256>& dict, size_t max_code_len) {
+            auto result_array = huffman_build_reverse_dict(dict, max_code_len);
+            return std::vector<uint16_t>(result_array.begin(), result_array.end());
+        },
+        py::arg("dict"), py::arg("max_code_len")
+    );
 
     m.def("huffman_decode_span", [](py::array_t<uint8_t, py::array::c_style> source,
                                     const size_t source_size_in_bits,
@@ -275,6 +281,8 @@ PYBIND11_MODULE(_libcaf, m) {
 
     // huffman_encdec bindings
     m.def("huffman_encode_file", &huffman_encode_file);
+
+    m.attr("MAX_CODE_LEN") = MAX_CODE_LEN;
 
     // Utils bindings
     py::class_<BitReader>(m, "BitReader")

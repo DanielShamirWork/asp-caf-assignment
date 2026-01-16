@@ -13,8 +13,6 @@
 
 #include "../util/bitreader.h"
 
-#define MAX_CODE_LEN 9 // there can be 511 possible codes so 9 bits are needed to represent them
-
 uint64_t calculate_compressed_size_in_bits(const std::array<uint64_t, 256>& hist, const std::array<std::vector<bool>, 256>& dict) {
     uint64_t total_bits = 0;
 
@@ -47,8 +45,8 @@ void huffman_encode_span(const std::span<const std::byte> source, const std::spa
     }
 }
 
-std::array<uint16_t, 511> huffman_build_reverse_dict(const std::array<std::vector<bool>, 256>& dict, const size_t max_code_len) {
-    std::array<uint16_t, 511> reverse_dict;
+std::array<uint16_t, 512> huffman_build_reverse_dict(const std::array<std::vector<bool>, 256>& dict, const size_t max_code_len) {
+    std::array<uint16_t, 512> reverse_dict = {};
 
     for (size_t symbol = 0; symbol < 256; symbol++) {
         const std::vector<bool>& code = dict[symbol];
@@ -78,7 +76,7 @@ std::array<uint16_t, 511> huffman_build_reverse_dict(const std::array<std::vecto
 }
 
 void huffman_decode_span(const std::span<const std::byte> source, const size_t source_size_in_bits, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict) {
-    std::array<uint16_t, 511> reverse_dict = huffman_build_reverse_dict(dict, MAX_CODE_LEN);
+    std::array<uint16_t, 512> reverse_dict = huffman_build_reverse_dict(dict, MAX_CODE_LEN);
 
     BitReader reader(source, source_size_in_bits);
     

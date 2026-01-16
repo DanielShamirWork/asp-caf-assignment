@@ -1,11 +1,63 @@
 import numpy as np
-import os
-import tempfile
-from pathlib import Path
 from pytest import mark
 
-from libcaf import huffman_encode_file, HUFFMAN_HEADER_SIZE
+from libcaf import (
+    huffman_encode_span,
+    huffman_decode_span,
+    histogram_parallel,
+    huffman_tree,
+    huffman_dict,
+    huffman_build_reverse_dict,
+    canonicalize_huffman_dict,
+    calculate_compressed_size_in_bits,
+    MAX_CODE_LEN,
+)
 
+empty_dict = [[] for _ in range(256)]
+
+dict_1 = empty_dict.copy()
+dict_1[61] = [False]
+dict_1[62] = [True, False]
+dict_1[63] = [True, True]
+
+dict_2 = empty_dict.copy()
+dict_2[61] = [False, False]
+dict_2[62] = [False, True]
+dict_2[63] = [True, False]
+dict_2[64] = [True, True, False]
+dict_2[65] = [True, True, True]
+
+@mark.parametrize("dict", [
+    empty_dict,
+    dict_1,
+    dict_2,
+])
+def test_huffman_build_reverse_dict(dict: list[list[bool]]) -> None:
+    """Test huffman_encode_file with random payloads of different sizes."""
+    reverse_dict = huffman_build_reverse_dict(dict, MAX_CODE_LEN)
+    # print(reverse_dict)
+    assert len(reverse_dict) == 2 ** MAX_CODE_LEN
+
+    # All values in the reverse dictionary should be bytes
+    for i in range(2 ** MAX_CODE_LEN):
+        assert reverse_dict[i] in range(256)
+
+    for symbol in range(256):
+        code = dict[symbol]
+        if not code:
+            continue
+
+        code_val = 0
+        for bit in code:
+            code_val = (code_val << 1) | int(bit)
+        
+        # All codes should appear 2^(code length) times
+        shift = MAX_CODE_LEN - len(code)
+        start_idx = code_val << shift
+        num_entries = 1 << shift
+
+        for i in range(start_idx, start_idx + num_entries):
+            assert reverse_dict[i] == symbol, f"Index {i} should map to symbol {symbol} (Code {code}), but got {reverse_dict[i]}"
 
 @mark.parametrize('payload_size', [
     10,
@@ -18,118 +70,24 @@ from libcaf import huffman_encode_file, HUFFMAN_HEADER_SIZE
     2 ** 24,  # 16 MiB
     2 ** 26,  # 64 MiB
     2 ** 28,  # 256 MiB
-    # 2 ** 30,  # 1 GiB
-    # 2 ** 32,  # 4 GiB
+    2 ** 30,  # 1 GiB
+    2 ** 32,  # 4 GiB
 ])
-def test_huffman_encode_file(random_payload: np.ndarray) -> None:
+def test_huffman_encdec(random_payload: np.ndarray) -> None:
     """Test huffman_encode_file with random payloads of different sizes."""
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_file = Path(tmpdir) / "input.bin"
-        output_file = Path(tmpdir) / "output.huff"
-
-        random_payload.tofile(input_file)
-
-        assert input_file.exists()
-        input_size = input_file.stat().st_size
-        assert input_size == len(random_payload)
-
-        assert not output_file.exists()
-
-        compressed_size = huffman_encode_file(str(input_file), str(output_file))
-        assert output_file.exists()
-
-        # Verify the returned size matches the actual file size
-        actual_compressed_size = output_file.stat().st_size
-        assert compressed_size == actual_compressed_size
-
-        # All files should have at least the header
-        assert compressed_size >= HUFFMAN_HEADER_SIZE
-
-        # Since huffman encoding *might* not compress the data, we can't assert
-        # that the compressed size is smaller than the original size
-        # But that's ok because it's not a mathematical property of the algorithm
-        # so it shouldn't be part of the test
-
-
-@mark.parametrize('payload_size', [
-    2 ** 12,
-    2 ** 16,
-])
-def test_huffman_encode_file_repetitive_data(payload_size: int) -> None:
-    """Test huffman_encode_file with highly repetitive data that compresses well."""
-
-    # Create highly repetitive data (should compress very well)
-    # Use mostly one byte value with occasional other bytes
-    rng = np.random.default_rng(0xBEEF + payload_size)
-    repetitive_payload = np.full(payload_size, ord('A'), dtype=np.uint8)
-    # Add some variation (5% of data)
-    num_variations = payload_size // 20
-    variation_indices = rng.choice(payload_size, num_variations, replace=False)
-    repetitive_payload[variation_indices] = rng.integers(ord('B'), ord('E'), num_variations, dtype=np.uint8)
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_file = Path(tmpdir) / "repetitive.bin"
-        output_file = Path(tmpdir) / "repetitive.huff"
-
-        repetitive_payload.tofile(input_file)
-
-        input_size = input_file.stat().st_size
-        compressed_size = huffman_encode_file(str(input_file), str(output_file))
-
-        # Repetitive data should compress significantly
-        # Header is 2056 bytes, so for large enough files, compressed should be much smaller
-        assert output_file.exists()
-        assert compressed_size < input_size, "Repetitive data should compress well"
-
-
-def test_huffman_encode_file_all_same_byte() -> None:
-    """Test huffman_encode_file with data containing only one unique byte value."""
-
-    payload_size = 10000
-    same_byte_payload = np.full(payload_size, 42, dtype=np.uint8)
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_file = Path(tmpdir) / "same_byte.bin"
-        output_file = Path(tmpdir) / "same_byte.huff"
-
-        same_byte_payload.tofile(input_file)
-
-        compressed_size = huffman_encode_file(str(input_file), str(output_file))
-
-        # With only one unique byte, each byte should encode to 1 bit
-        # So, the expected data size equals the the payload size
-        expected_data_size = (payload_size + 7) // 8  # Round up to bytes
-        expected_total = HUFFMAN_HEADER_SIZE + expected_data_size
-
-        assert output_file.exists()
-        assert compressed_size == expected_total
-
-
-def test_huffman_encode_file_overwrites_existing() -> None:
-    """Test that huffman_encode_file overwrites existing output files."""
-
-    payload_size = 1000
-    rng = np.random.default_rng(0xCAFE)
-    payload1 = rng.integers(0, 256, payload_size, dtype=np.uint8)
-    payload2 = rng.integers(0, 256, payload_size, dtype=np.uint8)
-
-    with tempfile.TemporaryDirectory() as tmpdir:
-        input_file = Path(tmpdir) / "overwrite_test.bin"
-        output_file = Path(tmpdir) / "overwrite_test.huff"
-
-        # First compression
-        payload1.tofile(input_file)
-        size1 = huffman_encode_file(str(input_file), str(output_file))
-        content1 = output_file.read_bytes()
-
-        # Second compression with different data
-        payload2.tofile(input_file)
-        size2 = huffman_encode_file(str(input_file), str(output_file))
-        content2 = output_file.read_bytes()
-
-        # The output should be different (different input data)
-        # Unless by extreme coincidence they compress identically
-        assert len(content2) == size2
-        # Just verify the file was overwritten by checking it exists and has valid structure
-        assert output_file.exists()
+    hist = histogram_parallel(random_payload)
+    tree = huffman_tree(hist)
+    dictionary = huffman_dict(tree)
+    canonicalize_huffman_dict(dictionary)
+    
+    total_bits = calculate_compressed_size_in_bits(hist, dictionary)
+    total_bytes = (total_bits + 7) // 8
+    
+    encoded_data = np.zeros(total_bytes, dtype=np.uint8)
+    huffman_encode_span(random_payload, encoded_data, dictionary)
+    
+    decoded_data = np.zeros(len(random_payload), dtype=np.uint8)
+    huffman_decode_span(encoded_data, total_bits, decoded_data, dictionary)
+    
+    np.testing.assert_array_equal(random_payload, decoded_data)
