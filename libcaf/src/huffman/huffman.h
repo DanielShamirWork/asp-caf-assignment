@@ -53,4 +53,5 @@ std::array<uint16_t, 512> huffman_build_reverse_dict(const std::array<std::vecto
 void huffman_decode_span(const std::span<const std::byte> source, const size_t source_size_in_bits, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict);
 
 uint64_t huffman_encode_file(const std::string& input_file, const std::string& output_file);
+uint64_t huffman_decode_file(const std::string& input_file, const std::string& output_file);
 #endif // HUFFMAN_H

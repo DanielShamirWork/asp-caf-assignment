@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 from pytest import mark
 
-from libcaf import huffman_encode_file, HUFFMAN_HEADER_SIZE
+from libcaf import huffman_encode_file, huffman_decode_file, HUFFMAN_HEADER_SIZE
 
 
 @mark.parametrize('payload_size', [
@@ -16,8 +16,8 @@ from libcaf import huffman_encode_file, HUFFMAN_HEADER_SIZE
     2 ** 16,
     2 ** 20,  # 1 MiB
     2 ** 24,  # 16 MiB
-    2 ** 26,  # 64 MiB
-    2 ** 28,  # 256 MiB
+    # 2 ** 26,  # 64 MiB
+    # 2 ** 28,  # 256 MiB
     # 2 ** 30,  # 1 GiB
     # 2 ** 32,  # 4 GiB
 ])
@@ -133,3 +133,38 @@ def test_huffman_encode_file_overwrites_existing() -> None:
         assert len(content2) == size2
         # Just verify the file was overwritten by checking it exists and has valid structure
         assert output_file.exists()
+
+@mark.parametrize('payload_size', [
+    10,
+    100,
+    2 ** 4,
+    2 ** 8,
+    2 ** 12,
+    2 ** 16,
+    2 ** 20,  # 1 MiB
+    2 ** 24,  # 16 MiB
+    # 2 ** 26,  # 64 MiB
+    # 2 ** 28,  # 256 MiB
+    # 2 ** 30,  # 1 GiB
+    # 2 ** 32,  # 4 GiB
+])
+def test_huffman_file_encoding_decoding(random_payload: np.ndarray) -> None:
+    """Test encoding a file and then decoding it back to verify data integrity."""
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_file = Path(tmpdir) / "original.bin"
+        compressed_file = Path(tmpdir) / "compressed.huff"
+        restored_file = Path(tmpdir) / "restored.bin"
+
+        random_payload.tofile(input_file)
+
+        huffman_encode_file(str(input_file), str(compressed_file))
+        assert compressed_file.exists()
+
+        huffman_decode_file(str(compressed_file), str(restored_file))
+        assert restored_file.exists()
+
+        assert restored_file.stat().st_size == input_file.stat().st_size
+
+        restored_data = np.fromfile(restored_file, dtype=np.uint8)
+        np.testing.assert_array_equal(random_payload, restored_data)

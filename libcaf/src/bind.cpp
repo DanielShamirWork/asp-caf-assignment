@@ -281,6 +281,7 @@ PYBIND11_MODULE(_libcaf, m) {
 
     // huffman_encdec bindings
     m.def("huffman_encode_file", &huffman_encode_file);
+    m.def("huffman_decode_file", &huffman_decode_file);
 
     m.attr("MAX_CODE_LEN") = MAX_CODE_LEN;
 

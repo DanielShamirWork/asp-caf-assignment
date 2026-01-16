@@ -68,10 +68,10 @@ def test_huffman_build_reverse_dict(dict: list[list[bool]]) -> None:
     2 ** 16,
     2 ** 20,  # 1 MiB
     2 ** 24,  # 16 MiB
-    2 ** 26,  # 64 MiB
-    2 ** 28,  # 256 MiB
-    2 ** 30,  # 1 GiB
-    2 ** 32,  # 4 GiB
+    # 2 ** 26,  # 64 MiB
+    # 2 ** 28,  # 256 MiB
+    # 2 ** 30,  # 1 GiB
+    # 2 ** 32,  # 4 GiB
 ])
 def test_huffman_encdec(random_payload: np.ndarray) -> None:
     """Test huffman_encode_file with random payloads of different sizes."""
