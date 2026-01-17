@@ -6,14 +6,13 @@
 #include <algorithm>
 #include <omp.h>
 #include <cstring>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <algorithm>
 
-/*
-    huffman compressed file layout:
-    
-    [8 bytes]   : uint64_t compressed data size (excluding this header and histogram)
-    [2048 bytes]: histogram (256 * sizeof(uint64_t))
-    [n bytes]   : compressed data
-*/
+#include "../util/bitreader.h"
 
 uint64_t calculate_compressed_size_in_bits(const std::array<uint64_t, 256>& hist, const std::array<std::vector<bool>, 256>& dict) {
     uint64_t total_bits = 0;
@@ -46,6 +45,53 @@ void huffman_encode_span(const std::span<const std::byte> source, const std::spa
         }
     }
 }
+
+std::array<uint16_t, 512> huffman_build_reverse_dict(const std::array<std::vector<bool>, 256>& dict, const size_t max_code_len) {
+    std::array<uint16_t, 512> reverse_dict = {};
+
+    for (size_t symbol = 0; symbol < 256; symbol++) {
+        const std::vector<bool>& code = dict[symbol];
+        size_t len = code.size();
+        if(len == 0)
+            continue;
+
+        uint16_t symbol_code = 0;
+        for (size_t i = 0; i < len; ++i) {
+            symbol_code = (symbol_code << 1) | code[i];
+        }
+        symbol_code <<= max_code_len - len;
+
+        // For a bit string of length len, the prefix uniquely defines the symbol
+        // so we can have multiple entries that all point to the same symbol
+        // without conflicts
+        // e.g. if 'A' has huffman code 00 then
+        // [0000] => 'A', [0001] => 'A', [0010] => 'A', [0011] => 'A'
+        uint64_t num_entries = (1 << (max_code_len - len));
+
+        for (size_t i = 0; i < num_entries; ++i) {
+            reverse_dict[symbol_code + i] = symbol;
+        }
+    }
+
+    return reverse_dict;
+}
+
+void huffman_decode_span(const std::span<const std::byte> source, const size_t source_size_in_bits, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict) {
+    std::array<uint16_t, 512> reverse_dict = huffman_build_reverse_dict(dict, MAX_CODE_LEN);
+
+    BitReader reader(source, source_size_in_bits);
+    
+    size_t dst_byte_idx = 0;
+    while (!reader.done()) {
+        uint64_t code = reader.read(MAX_CODE_LEN);
+        uint8_t symbol = reverse_dict[code];
+        size_t symbol_len = dict[symbol].size();
+        
+        destination[dst_byte_idx++] = static_cast<std::byte>(symbol);
+        reader.advance(symbol_len);
+    }
+}
+
 
 void huffman_encode_span_parallel(const std::span<const std::byte> source, const std::span<std::byte> destination, const std::array<std::vector<bool>, 256>& dict) {
     const int num_threads = omp_get_max_threads();
@@ -91,13 +137,13 @@ void huffman_encode_span_parallel(const std::span<const std::byte> source, const
     }
 
     // Combine all thread buffers into the output buffer
-    uint64_t current_bit_offset = 0;
+    uint64_t cur_bit_offset = 0;
     for (int t = 0; t < num_threads; ++t) {
         const uint64_t chunk_bits = thread_code_lengths[t];
         if (chunk_bits == 0) continue;
 
         const auto& thread_buffer = thread_buffers[t];
-        const size_t dst_start_bit = current_bit_offset;
+        const size_t dst_start_bit = cur_bit_offset;
         const size_t dst_bit_in_byte = dst_start_bit % 8;
 
         if (dst_bit_in_byte == 0) { // Destination is byte-aligned - we can use memcpy for full bytes
@@ -158,7 +204,7 @@ void huffman_encode_span_parallel(const std::span<const std::byte> source, const
             }
         }
 
-        current_bit_offset += chunk_bits;
+        cur_bit_offset += chunk_bits;
     }
 }
 
@@ -257,23 +303,24 @@ void huffman_encode_span_parallel_twopass(const std::span<const std::byte> sourc
 
 uint64_t huffman_encode_file(const std::string& input_file, const std::string& output_file) {
     // read input file
-    std::ifstream in(input_file, std::ios::binary | std::ios::ate);
-    if (!in) {
+    int in_fd = open(input_file.c_str(), O_RDONLY);
+    if (in_fd < 0)
         throw std::runtime_error("Failed to open input file");
+
+    struct stat file_stat;
+    if (fstat(in_fd, &file_stat) < 0) {
+        close(in_fd);
+        throw std::runtime_error("Failed to get file size");
     }
 
-    const uint64_t file_size = in.tellg();
-    in.seekg(0, std::ios::beg);
+    size_t file_size = file_stat.st_size;
+    void *in_ptr = mmap(nullptr, file_size, PROT_READ, MAP_PRIVATE, in_fd, 0);
+    close(in_fd);
 
-    std::vector<std::byte> input_data;
-    input_data.resize(file_size);
+    if (in_ptr == MAP_FAILED)
+        throw std::runtime_error("Failed to map file");
 
-    // read entire file, we need to do that to build the histogram
-    if (!in.read(reinterpret_cast<char*>(input_data.data()), file_size)) {
-        throw std::runtime_error("Failed to read input file");
-    } 
-    in.close();
-
+    std::span<const std::byte> input_data(static_cast<const std::byte*>(in_ptr), file_size);
     const std::array<uint64_t, 256> hist = histogram_parallel(input_data);
     const std::vector<HuffmanNode> tree = huffman_tree(hist);
     std::array<std::vector<bool>, 256> dict = huffman_dict(tree);
@@ -282,27 +329,152 @@ uint64_t huffman_encode_file(const std::string& input_file, const std::string& o
     const uint64_t compressed_size_in_bits = calculate_compressed_size_in_bits(hist, dict);
     const uint64_t compressed_size_in_bytes = (compressed_size_in_bits + 7) / 8; // round up to full bytes
 
-    std::vector<std::byte> compressed_data(compressed_size_in_bytes, std::byte{0});
-    huffman_encode_span_parallel_twopass(input_data, compressed_data, dict);
+    HuffmanHeader header;
+    header.original_file_size = file_size;
+    header.compressed_data_size = compressed_size_in_bits;
+    for (size_t i = 0; i < 256; i++) {
+        header.code_lengths[i] = dict[i].size();
+    }
 
-    // create or truncate output file
-    std::ofstream out(output_file, std::ios::binary | std::ios::trunc);
-    if (!out) {
+    size_t total_output_size = sizeof(HuffmanHeader) + compressed_size_in_bytes;
+    
+    int out_fd = open(output_file.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+    if (out_fd < 0) {
+        munmap(in_ptr, file_size);
         throw std::runtime_error("Failed to open output file");
     }
 
-    // write compressed data to output file
-    out.write(reinterpret_cast<const char*>(&compressed_size_in_bits), sizeof(compressed_size_in_bits)); // write compressed data size
-    
-    // write canonical huffman code lengths
-    for (size_t i = 0; i < 256; i++) {  
-        std::byte code_len = static_cast<std::byte>(dict[i].size());
-        out.write(reinterpret_cast<const char*>(&code_len), sizeof(code_len));
-    }   
-    
-    out.write(reinterpret_cast<const char*>(compressed_data.data()), compressed_size_in_bytes); // write compressed data
-    out.close();
+    if (ftruncate(out_fd, total_output_size) < 0) {
+        close(out_fd);
+        munmap(in_ptr, file_size);
+        throw std::runtime_error("Failed to truncate output file");
+    }
 
-    // return total size of the compressed file
-    return sizeof(uint64_t) + 256 + compressed_size_in_bytes;
+    void *out_ptr = mmap(nullptr, total_output_size, PROT_READ | PROT_WRITE, MAP_SHARED, out_fd, 0);
+    close(out_fd);
+
+    if (out_ptr == MAP_FAILED) {
+        munmap(in_ptr, file_size);
+        throw std::runtime_error("Failed to map file");
+    }
+
+    std::memcpy(out_ptr, &header, sizeof(HuffmanHeader));
+
+    std::byte *data_start = static_cast<std::byte*>(out_ptr) + sizeof(HuffmanHeader);
+    std::span<std::byte> output_data(data_start, compressed_size_in_bytes);
+    
+    // The actual encoding is done here
+    huffman_encode_span(input_data, output_data, dict);
+
+    // Cleanup
+    munmap(in_ptr, file_size);
+    munmap(out_ptr, total_output_size);
+
+    return total_output_size;
+}
+
+std::array<std::vector<bool>, 256> reconstruct_canonical_dict(const std::array<uint16_t, 256>& code_lengths) {
+    std::array<std::vector<bool>, 256> dict;
+    
+    struct Entry { uint16_t len; uint16_t sym; };
+    std::vector<Entry> entries;
+    entries.reserve(256);
+    
+    for (size_t sym = 0; sym < 256; ++sym) {
+        if (code_lengths[sym] > 0) {
+            entries.emplace_back(code_lengths[sym], static_cast<uint16_t>(sym));
+        }
+    }
+    
+    std::sort(entries.begin(), entries.end(), [](const Entry& a, const Entry& b) {
+        if (a.len != b.len) return a.len < b.len;
+        return a.sym < b.sym;
+    });
+    
+    uint64_t current_code = 0;
+    uint16_t current_len = 0;
+    
+    for (const auto& entry : entries) {
+        while (current_len < entry.len) {
+            current_code <<= 1;
+            current_len++;
+        }
+        
+        std::vector<bool> code_vec;
+        code_vec.reserve(current_len);
+        for (int i = current_len - 1; i >= 0; --i) {
+            code_vec.emplace_back((current_code >> i) & 1);
+        }
+        
+        dict[entry.sym] = code_vec;
+        
+        current_code++;
+    }
+    
+    return dict;
+}
+
+uint64_t huffman_decode_file(const std::string& input_file, const std::string& output_file) {
+    int in_fd = open(input_file.c_str(), O_RDONLY);
+    if (in_fd < 0) 
+        throw std::runtime_error("Failed to open input file");
+
+    struct stat in_stat;
+    if (fstat(in_fd, &in_stat) < 0) {
+        close(in_fd);
+        throw std::runtime_error("Failed to get input file size");
+    }
+    size_t in_size = in_stat.st_size;
+
+    if (in_size < sizeof(HuffmanHeader)) {
+        close(in_fd);
+        throw std::runtime_error("Input file too small to contain header");
+    }
+
+    void* in_ptr = mmap(nullptr, in_size, PROT_READ, MAP_PRIVATE, in_fd, 0);
+    close(in_fd);
+
+    if (in_ptr == MAP_FAILED)
+        throw std::runtime_error("Failed to map input file");
+
+    const HuffmanHeader* header = static_cast<const HuffmanHeader*>(in_ptr);
+    size_t original_file_size = header->original_file_size;
+    size_t compressed_data_bits = header->compressed_data_size;
+
+    std::array<std::vector<bool>, 256> dict = reconstruct_canonical_dict(header->code_lengths);
+
+    int out_fd = open(output_file.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
+    if (out_fd < 0) {
+        munmap(in_ptr, in_size);
+        throw std::runtime_error("Failed to open output file");
+    }
+
+    if (ftruncate(out_fd, original_file_size) < 0) {
+        close(out_fd);
+        munmap(in_ptr, in_size);
+        throw std::runtime_error("Failed to resize output file");
+    }
+
+    void* out_ptr = mmap(nullptr, original_file_size, PROT_READ | PROT_WRITE, MAP_SHARED, out_fd, 0);
+    close(out_fd);
+
+    if (out_ptr == MAP_FAILED) {
+        munmap(in_ptr, in_size);
+        throw std::runtime_error("Failed to map output file");
+    }
+
+    const std::byte* compressed_start = static_cast<const std::byte*>(in_ptr) + sizeof(HuffmanHeader);
+    size_t compressed_bytes = (compressed_data_bits + 7) / 8;
+
+    std::span<const std::byte> source_span(compressed_start, compressed_bytes);
+    std::span<std::byte> dest_span(static_cast<std::byte*>(out_ptr), original_file_size);
+
+    // The actual decoding is done here
+    huffman_decode_span(source_span, compressed_data_bits, dest_span, dict);
+
+    // Cleanup
+    munmap(out_ptr, original_file_size);
+    munmap(in_ptr, in_size);
+
+    return original_file_size;
 }
